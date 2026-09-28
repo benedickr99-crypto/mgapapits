@@ -172,10 +172,11 @@ export default function Login() {
             if (admins && admins.length > 0) {
               const notifications = admins.map((admin) => ({
                 user_id: admin.id,
-                title: "📋 New Tour Guide Applicant",
-                message: `${fullName} has submitted credentials for Tour Guide accreditation and is waiting for your review.`,
+                title: "📋 New Tour Guide Application",
+                message: `${fullName || "A new applicant"} has submitted credentials for Tour Guide accreditation and is waiting for your review.`,
                 type: "guide_application_submitted",
-                link: "/admin",
+                link: "/admin?tab=guides",
+                entity_id: userId,
               }));
               await supabase.from("notifications").insert(notifications);
             }

@@ -131,23 +131,23 @@ export default function Profile() {
 
       if (error) throw error;
 
-      // Send notification to Admin
+      // Send notification to all Admins
       try {
-        const { data: adminProfile } = await supabase
+        const { data: admins } = await supabase
           .from("profiles")
           .select("id")
-          .eq("role", "admin")
-          .limit(1)
-          .maybeSingle();
+          .eq("role", "admin");
 
-        if (adminProfile?.id) {
-          await supabase.from("notifications").insert({
-            user_id: adminProfile.id,
+        if (admins && admins.length > 0) {
+          const notifications = admins.map((admin) => ({
+            user_id: admin.id,
             title: "📋 New Tour Guide Application",
-            message: `${profile.full_name || "A trekker"} has applied to become an Accredited Tour Guide. Please review under Admin Guides.`,
+            message: `${profile.full_name || "A trekker"} has applied to become an Accredited Tour Guide. Please review under Tour Guides.`,
             type: "guide_application",
-            link: "/admin",
-          });
+            link: "/admin?tab=guides",
+            entity_id: user.id,
+          }));
+          await supabase.from("notifications").insert(notifications);
         }
       } catch (notifErr) {
         console.warn("Could not notify admin:", notifErr);

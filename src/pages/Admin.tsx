@@ -6,6 +6,7 @@ import {
   MapPin, ShieldAlert, Eye, Phone, Compass, AlertTriangle
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import AdminGuides from "./AdminGuides";
 import AdminIncidents from "./AdminIncidents";
 import { TrekkingHeatMap } from "@/components/admin/TrekkingHeatMap";
@@ -69,18 +70,62 @@ const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
+export type TabType = "bookings" | "guides" | "incidents" | "schedules" | "heatmap" | "analytics" | "announcements" | "reviews";
+
 export default function Admin() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [trails, setTrails] = useState<any[]>([]);
   const [guidesList, setGuidesList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const highlightId = searchParams.get("bookingId");
+  const tabParam = searchParams.get("tab") as any;
   
   const [activeTab, setActiveTab] = useState<
     "bookings" | "guides" | "incidents" | "schedules" | "heatmap" | "analytics" | "announcements" | "reviews"
-  >("bookings");
+  >(
+    tabParam && ["bookings", "guides", "incidents", "schedules", "heatmap", "analytics", "announcements", "reviews"].includes(tabParam)
+      ? tabParam
+      : "bookings"
+  );
+  const [pendingGuidesCount, setPendingGuidesCount] = useState<number>(0);
+
+  // Sync activeTab when URL tab parameter changes (e.g. from notification clicks)
+  useEffect(() => {
+    const currentTab = searchParams.get("tab") as any;
+    if (currentTab && ["bookings", "guides", "incidents", "schedules", "heatmap", "analytics", "announcements", "reviews"].includes(currentTab)) {
+      setActiveTab(currentTab);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (tabId: "bookings" | "guides" | "incidents" | "schedules" | "heatmap" | "analytics" | "announcements" | "reviews") => {
+    setActiveTab(tabId);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tab", tabId);
+      return next;
+    });
+  };
+
+  const fetchPendingGuidesCount = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, guide_application_status, role, is_available");
+
+      if (!error && data) {
+        const count = data.filter(
+          (p: any) =>
+            p.guide_application_status === "pending" ||
+            (p.role === "guide" && p.is_available === false && p.guide_application_status !== "approved")
+        ).length;
+        setPendingGuidesCount(count);
+      }
+    } catch (err) {
+      console.error("Error fetching pending guides count:", err);
+    }
+  };
 
   // Roster detail view modal
   const [selectedRosterBooking, setSelectedRosterBooking] = useState<Booking | null>(null);
@@ -153,8 +198,9 @@ export default function Admin() {
 
   useEffect(() => {
     fetchData();
+    fetchPendingGuidesCount();
 
-    const channel = supabase
+    const bookingChannel = supabase
       .channel("booking-updates")
       .on(
         "postgres_changes",
@@ -163,8 +209,38 @@ export default function Admin() {
       )
       .subscribe();
 
+    // Real-time listener for new or updated tour guide applications
+    const guideAppsChannel = supabase
+      .channel("admin-guide-applications-listener")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        (payload) => {
+          fetchPendingGuidesCount();
+
+          const record = payload.new as any;
+          if (
+            record &&
+            (record.guide_application_status === "pending" ||
+              (record.role === "guide" && record.is_available === false && record.guide_application_status !== "approved"))
+          ) {
+            // New application submitted
+            const applicantName = record.full_name || "A new applicant";
+            toast("📋 New Tour Guide Application!", {
+              description: `${applicantName} submitted credentials for review.`,
+              action: {
+                label: "Review",
+                onClick: () => handleTabChange("guides"),
+              },
+            });
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(bookingChannel);
+      supabase.removeChannel(guideAppsChannel);
     };
   }, []);
 
@@ -228,7 +304,7 @@ export default function Admin() {
         <div className="flex bg-slate-200/80 p-1 rounded-2xl overflow-x-auto max-w-full scrollbar-none">
           {[
             { id: "bookings", label: "Permits & Bookings" },
-            { id: "guides", label: "Tour Guides" },
+            { id: "guides", label: "Tour Guides", badge: pendingGuidesCount },
             { id: "incidents", label: "Safety Incidents" },
             { id: "schedules", label: "Schedules & Capacity" },
             { id: "heatmap", label: "Trail Heat Map" },
@@ -238,18 +314,48 @@ export default function Admin() {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+              onClick={() => handleTabChange(tab.id as TabType)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                 activeTab === tab.id
                   ? "bg-white shadow-xs text-emerald-900"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              {tab.label}
+              <span>{tab.label}</span>
+              {tab.badge && tab.badge > 0 ? (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white animate-pulse">
+                  {tab.badge}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
       </div>
+
+      {/* Pending Guide Applicants Alert Banner for Admin */}
+      {pendingGuidesCount > 0 && activeTab !== "guides" && (
+        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-amber-900">
+                {pendingGuidesCount} Tour Guide Application{pendingGuidesCount > 1 ? "s" : ""} Pending Review
+              </p>
+              <p className="text-[11px] text-amber-700">
+                Tour guide applicant credentials and certification IDs are awaiting administrator verification and accreditation.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => handleTabChange("guides")}
+            className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition shrink-0 self-start sm:self-center"
+          >
+            Review Applications &rarr;
+          </button>
+        </div>
+      )}
 
       {/* ================= TABS CONTENT ================= */}
 

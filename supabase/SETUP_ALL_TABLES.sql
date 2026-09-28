@@ -359,3 +359,40 @@ DROP POLICY IF EXISTS "Anyone view admin profile for contact" ON public.profiles
 CREATE POLICY "Anyone view admin profile for contact" ON public.profiles FOR SELECT
 USING (role = 'admin');
 
+-- 20. Notification Trigger for Tour Guide Applications
+CREATE OR REPLACE FUNCTION public.notify_admin_on_guide_application()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  -- Trigger when:
+  -- 1) A new profile is inserted with role 'guide' or guide_application_status = 'pending'
+  -- 2) An existing profile is updated to guide_application_status = 'pending' from something else
+  IF (TG_OP = 'INSERT' AND (NEW.role = 'guide'::public.app_role OR NEW.guide_application_status = 'pending'))
+     OR (TG_OP = 'UPDATE' AND NEW.guide_application_status = 'pending' AND (OLD.guide_application_status IS DISTINCT FROM 'pending')) THEN
+     
+    INSERT INTO public.notifications (user_id, title, message, type, link, entity_id)
+    SELECT 
+      id,
+      '📋 New Tour Guide Application',
+      COALESCE(NEW.full_name, 'A new applicant') || ' has submitted credentials for Tour Guide accreditation and is waiting for your review.',
+      'guide_application',
+      '/admin?tab=guides',
+      NEW.id
+    FROM public.profiles
+    WHERE role = 'admin'::public.app_role;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_notify_admin_on_guide_application ON public.profiles;
+CREATE TRIGGER trg_notify_admin_on_guide_application
+  AFTER INSERT OR UPDATE ON public.profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.notify_admin_on_guide_application();
+
+

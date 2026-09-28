@@ -22,14 +22,21 @@ export default function NotificationBell() {
 
     if (notification.link) {
       let url = notification.link;
-      if (notification.entity_id) {
+      if (notification.entity_id && !url.includes("?") && !url.includes("bookingId=")) {
         url += `?bookingId=${notification.entity_id}`;
       }
       navigate(url);
     } else {
-      // FALLBACK for old notifications created before the link column was added
+      // Fallback for notifications created without explicit link
       if (notification.type === 'booking_created') {
         navigate('/admin');
+      } else if (
+        notification.type === 'guide_application' ||
+        notification.type === 'guide_application_submitted'
+      ) {
+        navigate('/admin?tab=guides');
+      } else if (notification.type === 'guide_approval') {
+        navigate('/guide-dashboard');
       } else {
         navigate('/my-bookings');
       }
@@ -95,8 +102,10 @@ export default function NotificationBell() {
                   <div className="mt-0.5">
                     {notification.type === 'booking_created' ? (
                       <div className="h-2 w-2 mt-1.5 rounded-full bg-blue-500" />
-                    ) : notification.type === 'booking_approved' ? (
+                    ) : notification.type === 'booking_approved' || notification.type === 'guide_approval' ? (
                       <div className="h-2 w-2 mt-1.5 rounded-full bg-green-500" />
+                    ) : notification.type === 'guide_application' || notification.type === 'guide_application_submitted' ? (
+                      <div className="h-2 w-2 mt-1.5 rounded-full bg-amber-500 animate-pulse" />
                     ) : (
                       <div className="h-2 w-2 mt-1.5 rounded-full bg-red-500" />
                     )}
