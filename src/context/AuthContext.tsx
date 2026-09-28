@@ -14,6 +14,7 @@ export type Profile = {
   image_url?: string | null;
   is_available?: boolean;
   guide_id_url?: string | null;
+  guide_application_status?: string | null;
 };
 
 type AuthContextType = {

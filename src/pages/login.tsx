@@ -150,13 +150,38 @@ export default function Login() {
           guideIdUrl = await uploadGuideId(userId);
         }
 
-        // Step 3: Update the profile with guide_id_url (wait a moment for trigger to create profile)
-        if (guideIdUrl && userId) {
+        // Step 3: Update the profile with guide_id_url & pending status (wait a moment for trigger to create profile)
+        if (role === "guide" && userId) {
           await new Promise((r) => setTimeout(r, 1500));
           await supabase
             .from("profiles")
-            .update({ guide_id_url: guideIdUrl } as any)
+            .update({
+              guide_id_url: guideIdUrl,
+              guide_application_status: "pending",
+              is_available: false,
+            } as any)
             .eq("id", userId);
+
+          // Notify admins that a new guide applicant has registered
+          try {
+            const { data: admins } = await supabase
+              .from("profiles")
+              .select("id")
+              .eq("role", "admin");
+
+            if (admins && admins.length > 0) {
+              const notifications = admins.map((admin) => ({
+                user_id: admin.id,
+                title: "📋 New Tour Guide Applicant",
+                message: `${fullName} has submitted credentials for Tour Guide accreditation and is waiting for your review.`,
+                type: "guide_application_submitted",
+                link: "/admin",
+              }));
+              await supabase.from("notifications").insert(notifications);
+            }
+          } catch (notifErr) {
+            console.warn("Could not notify admin about new guide applicant:", notifErr);
+          }
         }
 
         setSuccess(

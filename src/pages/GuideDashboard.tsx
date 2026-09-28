@@ -279,6 +279,132 @@ export default function GuideDashboard() {
     (b.status === 'approved' || b.status === 'confirmed' || b.status === 'completed')
   );
 
+  // If application is still pending administrator review
+  if (profile?.guide_application_status === "pending" || (profile?.role === "guide" && profile?.is_available === false && profile?.guide_application_status !== "approved")) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-amber-50/60 to-slate-100 py-16 px-4">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-3xl shadow-xl border border-amber-200 overflow-hidden">
+            {/* Header banner */}
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-8 text-white text-center">
+              <div className="w-16 h-16 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/30">
+                <Clock size={32} className="text-white" />
+              </div>
+              <span className="px-3.5 py-1 bg-white/25 rounded-full text-xs font-black tracking-wider uppercase inline-block mb-2">
+                Application Under Review
+              </span>
+              <h1 className="text-2xl font-black">Tour Guide Accreditation Pending</h1>
+              <p className="text-amber-100 text-xs mt-2 max-w-md mx-auto">
+                Thank you for applying to become an accredited Tour Guide for Northern Negros Natural Park (NNNP).
+              </p>
+            </div>
+
+            {/* Content body */}
+            <div className="p-8 space-y-6">
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-xs text-amber-900 leading-relaxed">
+                <p className="font-bold text-sm text-amber-950 mb-1">📋 What happens next?</p>
+                <p>
+                  The DENR NNNP Protected Area Management Board / Park Administrator must manually inspect and verify your submitted Tour Guide ID or Mountaineering Accreditation Certificate before activating your guide assignments.
+                </p>
+              </div>
+
+              {/* Submitted Details */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-gray-500">Your Submitted Information</h3>
+                <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-2xl p-4 text-xs">
+                  <div>
+                    <span className="text-gray-400 font-bold block text-[10px]">APPLICANT NAME</span>
+                    <span className="font-bold text-gray-900">{profile?.full_name || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 font-bold block text-[10px]">CONTACT PHONE</span>
+                    <span className="font-bold text-gray-900">{profile?.phone || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 font-bold block text-[10px]">EXPERIENCE</span>
+                    <span className="font-bold text-gray-900">{profile?.experience_years || 0} years</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 font-bold block text-[10px]">STATUS</span>
+                    <span className="inline-flex items-center gap-1 font-bold text-amber-600">
+                      <Clock size={12} /> Under Admin Review
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Uploaded Certificate Preview */}
+              {profile?.guide_id_url && (
+                <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50">
+                  <span className="text-xs font-black uppercase tracking-wider text-gray-500 block mb-2">
+                    📎 Uploaded ID / Certificate
+                  </span>
+                  {/\.(jpg|jpeg|png|gif|webp)$/i.test(profile.guide_id_url) ? (
+                    <div className="rounded-xl overflow-hidden border border-gray-200 bg-white">
+                      <img
+                        src={profile.guide_id_url}
+                        alt="Submitted Guide ID"
+                        className="w-full max-h-56 object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <a
+                      href={profile.guide_id_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-xs font-bold text-emerald-700 bg-emerald-50 px-4 py-2 rounded-xl hover:bg-emerald-100 transition"
+                    >
+                      <ExternalLink size={14} /> Open Uploaded Document
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {/* Refresh button */}
+              <div className="pt-2 flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={async () => {
+                    await refreshProfile();
+                    toast.info("Status refreshed. Checking with server...");
+                  }}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow transition flex items-center justify-center gap-2"
+                >
+                  <Activity size={14} /> Refresh Application Status
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If application was rejected
+  if (profile?.guide_application_status === "rejected") {
+    return (
+      <div className="min-h-screen bg-slate-50 py-16 px-4">
+        <div className="max-w-md mx-auto bg-white rounded-3xl shadow-xl border border-red-200 p-8 text-center space-y-4">
+          <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
+            <XCircle size={32} />
+          </div>
+          <h1 className="text-xl font-black text-gray-900">Application Not Approved</h1>
+          <p className="text-xs text-gray-600 leading-relaxed">
+            Your application for Tour Guide accreditation was reviewed by the DENR NNNP Park Administrator and could not be approved at this time.
+          </p>
+          <p className="text-xs text-gray-500">
+            Please check your notifications for specific feedback from the administrator or contact the DENR NNNP Headquarters.
+          </p>
+          <a
+            href="/"
+            className="inline-block py-2.5 px-6 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold transition"
+          >
+            Return to Homepage
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-12">
       {/* HEADER */}
