@@ -13,6 +13,7 @@ export type Profile = {
   certifications?: string | null;
   image_url?: string | null;
   is_available?: boolean;
+  guide_id_url?: string | null;
 };
 
 type AuthContextType = {

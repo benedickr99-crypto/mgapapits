@@ -14,6 +14,7 @@ type GuideProfile = {
   is_available: boolean | null;
   role: string | null;
   guide_application_status?: string | null;
+  guide_id_url?: string | null;
   created_at?: string;
 };
 
@@ -345,6 +346,31 @@ export default function AdminGuides() {
                     )}
                     {applicant.bio && (
                       <p className="italic text-gray-700 mt-1 line-clamp-3">"{applicant.bio}"</p>
+                    )}
+                    {applicant.guide_id_url ? (
+                      <div className="mt-2 pt-2 border-t border-amber-100">
+                        <strong className="text-gray-900 block mb-1">📎 Submitted ID / Certificate:</strong>
+                        {/\.(jpg|jpeg|png|gif|webp)$/i.test(applicant.guide_id_url) ? (
+                          <a href={applicant.guide_id_url} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={applicant.guide_id_url}
+                              alt="Guide Certificate"
+                              className="w-full max-h-40 object-contain rounded-lg border border-amber-200 mt-1 cursor-pointer hover:opacity-90"
+                            />
+                          </a>
+                        ) : (
+                          <a
+                            href={applicant.guide_id_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-amber-700 hover:text-amber-900 underline font-semibold"
+                          >
+                            📄 View Uploaded Document
+                          </a>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-amber-600 italic">⚠️ No ID or certificate uploaded</p>
                     )}
                   </div>
                 </div>

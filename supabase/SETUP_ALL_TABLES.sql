@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     image_url TEXT,
     is_available BOOLEAN DEFAULT true,
     guide_application_status TEXT DEFAULT 'none',
+    guide_id_url TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -46,6 +47,7 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bio TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS image_url TEXT;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_available BOOLEAN DEFAULT true;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS guide_application_status TEXT DEFAULT 'none';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS guide_id_url TEXT;
 
 -- Existing guides should default to approved
 UPDATE public.profiles 
