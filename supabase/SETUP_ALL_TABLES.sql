@@ -366,13 +366,20 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  v_should_notify BOOLEAN := false;
 BEGIN
-  -- Trigger when:
-  -- 1) A new profile is inserted with role 'guide' or guide_application_status = 'pending'
-  -- 2) An existing profile is updated to guide_application_status = 'pending' from something else
-  IF (TG_OP = 'INSERT' AND (NEW.role = 'guide'::public.app_role OR NEW.guide_application_status = 'pending'))
-     OR (TG_OP = 'UPDATE' AND NEW.guide_application_status = 'pending' AND (OLD.guide_application_status IS DISTINCT FROM 'pending')) THEN
-     
+  IF TG_OP = 'INSERT' THEN
+    IF (NEW.role = 'guide'::public.app_role OR NEW.guide_application_status = 'pending') THEN
+      v_should_notify := true;
+    END IF;
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF NEW.guide_application_status = 'pending' AND (OLD.guide_application_status IS DISTINCT FROM 'pending') THEN
+      v_should_notify := true;
+    END IF;
+  END IF;
+
+  IF v_should_notify THEN
     INSERT INTO public.notifications (user_id, title, message, type, link, entity_id)
     SELECT 
       id,
@@ -394,5 +401,10 @@ CREATE TRIGGER trg_notify_admin_on_guide_application
   AFTER INSERT OR UPDATE ON public.profiles
   FOR EACH ROW
   EXECUTE FUNCTION public.notify_admin_on_guide_application();
+
+-- 21. Indexes for notifications and guide applications
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON public.notifications(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_profiles_guide_status ON public.profiles(guide_application_status);
 
 

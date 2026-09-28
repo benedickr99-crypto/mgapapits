@@ -131,7 +131,30 @@ export default function GuideDashboard() {
     fetchBookings();
     fetchAvailability();
     fetchIncidents();
-  }, [fetchBookings, fetchAvailability, fetchIncidents]);
+
+    if (!user) return;
+
+    // Real-time listener for guide accreditation status changes (approval/rejection)
+    const profileChannel = supabase
+      .channel(`guide-status-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${user.id}`,
+        },
+        async () => {
+          await refreshProfile();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(profileChannel);
+    };
+  }, [user, fetchBookings, fetchAvailability, fetchIncidents, refreshProfile]);
 
   const handleSubmitIncident = async (e: React.FormEvent) => {
     e.preventDefault();
