@@ -299,37 +299,6 @@ export default function SiteHeader() {
             </Link>
           )}
 
-          {user && (
-            <div className="pt-2 mt-2 border-t border-gray-100 space-y-1">
-              <div className="px-3.5 py-1 text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                My Account
-              </div>
-              <Link
-                to="/my-bookings"
-                onClick={() => setMobile(false)}
-                className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-gray-700 hover:bg-gray-100 text-sm font-medium"
-              >
-                <Calendar size={16} className="text-gray-500" /> My Bookings
-              </Link>
-              <Link
-                to="/profile"
-                onClick={() => setMobile(false)}
-                className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-gray-700 hover:bg-gray-100 text-sm font-medium"
-              >
-                <User size={16} className="text-gray-500" /> Profile
-              </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  setMobile(false);
-                  logout();
-                }}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-red-600 hover:bg-red-50 text-sm font-medium transition-colors"
-              >
-                <LogOut size={16} /> Logout
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </header>
