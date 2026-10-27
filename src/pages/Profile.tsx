@@ -42,7 +42,7 @@ export default function Profile() {
     try {
       const { data: profileData } = await supabase
         .from("profiles")
-        .select("full_name, phone, nationality, role, experience_years, certifications, bio, guide_application_status")
+        .select("*")
         .eq("id", user.id)
         .single();
 
@@ -88,19 +88,16 @@ export default function Profile() {
 
     setSaving(true);
     try {
-      const targetRole =
-        user.email?.toLowerCase() === "benedickluiser@gmail.com"
-          ? currentRole
-          : currentRole === "admin"
-          ? "trekker"
-          : currentRole;
-
+      // Role is preserved from the DB as-is — admin controls roles via Admin panel.
       const { error } = await supabase.from("profiles").upsert({
         id: user.id,
         full_name: profile.full_name || null,
         phone: profile.phone || null,
         nationality: profile.nationality || null,
-        role: targetRole as any,
+        experience_years: profile.experience_years || null,
+        certifications: profile.certifications || null,
+        bio: profile.bio || null,
+        role: currentRole as any,
       });
 
       if (error) throw error;
@@ -147,7 +144,11 @@ export default function Profile() {
             link: "/admin?tab=guides",
             entity_id: user.id,
           }));
-          await supabase.from("notifications").insert(notifications);
+          const { error: notifErr } = await supabase.from("notifications").insert(notifications);
+          if (notifErr) {
+            const fallbackNotifications = notifications.map((n) => ({ ...n, type: "booking_created" }));
+            await supabase.from("notifications").insert(fallbackNotifications);
+          }
         }
       } catch (notifErr) {
         console.warn("Could not notify admin:", notifErr);
@@ -239,24 +240,40 @@ export default function Profile() {
             </p>
           </div>
         </div>
-      ) : (
-        <div className="p-6 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-3xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
+      ) : applicationStatus === "approved" && role !== "guide" ? (
+        <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-3xl flex items-start gap-4 shadow-xs">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+            <CheckCircle size={20} />
+          </div>
           <div>
-            <h3 className="text-base font-bold text-emerald-950 flex items-center gap-2">
-              <Compass className="text-emerald-700" size={20} /> Apply as an Accredited Tour Guide
-            </h3>
-            <p className="text-xs text-emerald-800 mt-1 max-w-xl">
-              Experienced in trekking Mount Mandalagan or Silay trails? Submit your application to become an accredited NNNP Tour Guide and guide trekking groups.
+            <h3 className="text-base font-bold text-emerald-950">Guide Application Approved!</h3>
+            <p className="text-xs text-emerald-800 mt-1">
+              Your guide application has been approved. Your role will be updated shortly by the administrator.
             </p>
+          </div>
+        </div>
+      ) : role === "trekker" && !applicationStatus ? (
+        <div className="p-6 bg-slate-50 border border-slate-200 rounded-3xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xs">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 bg-slate-200 text-slate-600 rounded-2xl flex items-center justify-center">
+              <Award size={24} />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">Become an Accredited NNNP Tour Guide</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Apply to become a certified DENR NNNP tour guide and earn income guiding trekkers.
+              </p>
+            </div>
           </div>
           <button
             onClick={() => setShowApplyModal(true)}
-            className="bg-emerald-700 hover:bg-emerald-800 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-sm transition whitespace-nowrap"
+            className="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition shadow-sm whitespace-nowrap"
           >
-            Apply to be a Guide
+            Apply as Tour Guide
           </button>
         </div>
-      )}
+      ) : null}
+
 
       {/* PROFILE FORM */}
       <div className="bg-white rounded-3xl shadow-xs border border-gray-200 p-6 space-y-6">

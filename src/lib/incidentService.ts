@@ -24,6 +24,7 @@ export type IncidentReport = {
 };
 
 const LOCAL_STORAGE_KEY = "nnnp_incident_reports";
+let incidentReportsTableAvailable: boolean | null = null;
 
 function getLocalIncidents(): IncidentReport[] {
   try {
@@ -84,25 +85,34 @@ export async function createIncidentReport(report: {
   saveLocalIncidents([newIncident, ...localList]);
 
   try {
-    // 1. Attempt insert into Supabase incident_reports
-    const { data, error } = await supabase
-      .from("incident_reports")
-      .insert({
-        id: newIncident.id,
-        guide_id: newIncident.guide_id,
-        trail_id: newIncident.trail_id,
-        trail_name: newIncident.trail_name,
-        booking_id: newIncident.booking_id,
-        category: newIncident.category,
-        severity: newIncident.severity,
-        location_details: newIncident.location_details,
-        description: newIncident.description,
-        action_taken: newIncident.action_taken,
-        requires_assistance: newIncident.requires_assistance,
-        status: newIncident.status,
-      } as any)
-      .select()
-      .single();
+    // 1. Attempt insert into Supabase incident_reports only if table exists
+    let data: any = null;
+    let error: any = null;
+    if (incidentReportsTableAvailable !== false) {
+      const res = await supabase
+        .from("incident_reports")
+        .insert({
+          id: newIncident.id,
+          guide_id: newIncident.guide_id,
+          trail_id: newIncident.trail_id,
+          trail_name: newIncident.trail_name,
+          booking_id: newIncident.booking_id,
+          category: newIncident.category,
+          severity: newIncident.severity,
+          location_details: newIncident.location_details,
+          description: newIncident.description,
+          action_taken: newIncident.action_taken,
+          requires_assistance: newIncident.requires_assistance,
+          status: newIncident.status,
+        } as any)
+        .select()
+        .single();
+      data = res.data;
+      error = res.error;
+      if (error && ((error as any).code === "PGRST205" || (error as any).status === 404 || error.message?.includes("schema cache"))) {
+        incidentReportsTableAvailable = false;
+      }
+    }
 
     // 2. Notify Admin
     try {
@@ -122,7 +132,7 @@ export async function createIncidentReport(report: {
             ? "⚠️ [HIGH SEVERITY]"
             : "📢 [INCIDENT REPORT]";
 
-        await supabase.from("notifications").insert({
+        const { error: insErr } = await supabase.from("notifications").insert({
           user_id: adminProfile.id,
           title: `${severityEmoji} Trail Incident Reported`,
           message: `Guide ${report.guide_name || "Assigned Guide"} reported: "${report.category.toUpperCase()}" at ${
@@ -131,6 +141,18 @@ export async function createIncidentReport(report: {
           type: "incident_alert",
           link: "/admin",
         });
+
+        if (insErr) {
+          await supabase.from("notifications").insert({
+            user_id: adminProfile.id,
+            title: `${severityEmoji} Trail Incident Reported`,
+            message: `Guide ${report.guide_name || "Assigned Guide"} reported: "${report.category.toUpperCase()}" at ${
+              report.trail_name || "Trail"
+            }. ${report.requires_assistance ? "⚠️ IMMEDIATE ASSISTANCE REQUESTED!" : ""}`,
+            type: "booking_created",
+            link: "/admin",
+          });
+        }
       }
     } catch (notifErr) {
       console.warn("Could not send admin notification:", notifErr);
@@ -157,6 +179,11 @@ export async function createIncidentReport(report: {
 export async function getIncidentReports(guideId?: string): Promise<IncidentReport[]> {
   const localList = getLocalIncidents();
 
+  // If table does not exist in Supabase, return local storage directly without failing network calls
+  if (incidentReportsTableAvailable === false) {
+    return guideId ? localList.filter((l) => l.guide_id === guideId) : localList;
+  }
+
   try {
     let query = supabase
       .from("incident_reports")
@@ -172,7 +199,20 @@ export async function getIncidentReports(guideId?: string): Promise<IncidentRepo
 
     const { data, error } = await query;
 
-    if (!error && data && data.length > 0) {
+    if (error) {
+      if (
+        (error as any).code === "PGRST205" ||
+        (error as any).status === 404 ||
+        error.message?.includes("schema cache")
+      ) {
+        incidentReportsTableAvailable = false;
+      }
+      return guideId ? localList.filter((l) => l.guide_id === guideId) : localList;
+    }
+
+    incidentReportsTableAvailable = true;
+
+    if (data && data.length > 0) {
       // Merge remote and local without duplicates
       const remoteIds = new Set(data.map((d: any) => d.id));
       const relevantLocal = guideId
@@ -184,7 +224,7 @@ export async function getIncidentReports(guideId?: string): Promise<IncidentRepo
       return merged;
     }
   } catch (e) {
-    console.warn("Error querying incident_reports, fallback to local:", e);
+    incidentReportsTableAvailable = false;
   }
 
   // Fallback to local
@@ -227,10 +267,18 @@ export async function updateIncidentStatus(
       updatePayload.resolved_at = new Date().toISOString();
     }
 
-    const { error } = await supabase
-      .from("incident_reports")
-      .update(updatePayload)
-      .eq("id", id);
+    if (incidentReportsTableAvailable !== false) {
+      const { error: updateErr } = await supabase
+        .from("incident_reports")
+        .update(updatePayload)
+        .eq("id", id);
+      if (updateErr) {
+        if (((updateErr as any).code === "PGRST205" || (updateErr as any).status === 404 || updateErr.message?.includes("schema cache"))) {
+          incidentReportsTableAvailable = false;
+        }
+        console.warn("updateIncidentStatus remote warning:", updateErr.message);
+      }
+    }
 
     // Notify the guide about status update
     const target = updatedLocal.find((i) => i.id === id);
@@ -243,21 +291,28 @@ export async function updateIncidentStatus(
             ? "Admin has marked this incident as RESOLVED."
             : "Admin has updated your incident report.";
 
-        await supabase.from("notifications").insert({
+        const { error: gInsErr } = await supabase.from("notifications").insert({
           user_id: target.guide_id,
           title: `Incident Report Update: ${status.toUpperCase()}`,
           message: `${statusLabel} ${adminNotes ? `Admin Note: ${adminNotes}` : ""}`,
           type: "incident_status",
           link: "/guide-dashboard",
         });
+
+        if (gInsErr) {
+          await supabase.from("notifications").insert({
+            user_id: target.guide_id,
+            title: `Incident Report Update: ${status.toUpperCase()}`,
+            message: `${statusLabel} ${adminNotes ? `Admin Note: ${adminNotes}` : ""}`,
+            type: "booking_approved",
+            link: "/guide-dashboard",
+          });
+        }
       } catch (e) {
         console.warn("Could not notify guide:", e);
       }
     }
 
-    if (error) {
-      console.warn("updateIncidentStatus remote warning:", error.message);
-    }
     return { success: true };
   } catch (err: any) {
     console.warn("updateIncidentStatus exception:", err);

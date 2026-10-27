@@ -23,7 +23,7 @@ import {
 import {
   FileText, Download, Eye, AlertCircle, CheckCircle2,
   Calendar, Users, Phone, Info, MapPin, Printer, Star,
-  Compass, ExternalLink, Filter, XCircle, Clock, RefreshCw
+  Compass, ExternalLink, Filter, XCircle, Clock, RefreshCw, Building2, ShieldCheck, Trash2
 } from "lucide-react";
 import { BookingVoucherModal } from "@/components/BookingVoucherModal";
 import { ReviewModal } from "@/components/ReviewModal";
@@ -31,7 +31,8 @@ import {
   getLocalParticipants, 
   getBookingParticipants, 
   getBookingTimeSlot, 
-  getBookingReferenceNumber 
+  getBookingReferenceNumber,
+  deleteBooking
 } from "@/lib/bookingService";
 import { getTrailMetadata } from "@/lib/trailData";
 
@@ -140,7 +141,7 @@ function MyBookingsSkeleton() {
 }
 
 export default function MyBookings() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   // ⚡ SWR CACHING: Read existing bookings from cache immediately for 0ms page load
   const [data, setData] = useState<BookingWithTrail[]>(() => {
@@ -260,6 +261,37 @@ export default function MyBookings() {
     }
   };
 
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDeleteBooking = async (bookingId: string) => {
+    setDeletingId(bookingId);
+    try {
+      await deleteBooking(bookingId);
+
+      // Remove from state and cache
+      setData((prev) => {
+        const next = prev.filter((b) => b.id !== bookingId);
+        if (user?.id) {
+          try {
+            localStorage.setItem(`nnnp_bookings_${user.id}`, JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
+
+      if (selectedBooking?.id === bookingId) {
+        setSelectedBooking(null);
+      }
+
+      alert("Booking has been permanently deleted.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to delete booking.";
+      alert(message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const isCancelable = (status: string, climbDate: string) => {
     const s = status.toLowerCase();
     if (s !== 'pending' && s !== 'approved' && s !== 'confirmed') return false;
@@ -304,6 +336,7 @@ export default function MyBookings() {
       climbDate: booking.climb_date,
       timeSlot,
       groupSize: booking.group_size,
+      status: booking.status,
       guideName: booking.guides?.name || "DENR Designated Guide",
       emergencyContactName: booking.emergency_contact_name,
       emergencyContactPhone: booking.emergency_contact_phone,
@@ -464,6 +497,22 @@ export default function MyBookings() {
                       </span>
                     </div>
                   </div>
+
+                  {b.status === "approved" && (
+                    <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-2.5 text-xs text-emerald-950">
+                      <div className="p-1 rounded-lg bg-emerald-100 text-emerald-800 shrink-0 mt-0.5">
+                        <Building2 className="w-3.5 h-3.5 text-emerald-700" />
+                      </div>
+                      <div className="leading-snug">
+                        <span className="font-bold text-emerald-900 block">
+                          Approved by Admin — Next Step: Pay & Claim Permit
+                        </span>
+                        <span className="text-emerald-800 text-[11px]">
+                          Please proceed to the <strong>DENR NNNP Office</strong> to settle the trekking fee and claim your official printed permit.
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Right: Actions */}
@@ -546,6 +595,39 @@ export default function MyBookings() {
                       </AlertDialogContent>
                     </AlertDialog>
                   )}
+
+                  {/* Delete booking action */}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <button
+                        disabled={deletingId === b.id}
+                        className="inline-flex items-center gap-1 text-xs font-bold text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 px-2.5 py-2 rounded-xl transition"
+                        title="Delete booking"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        {deletingId === b.id ? "Deleting..." : "Delete"}
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="bg-white rounded-2xl">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="text-red-600 flex items-center gap-2">
+                          <Trash2 className="w-5 h-5" /> Delete Trekking Booking
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to permanently delete your booking for <strong>{b.trails?.name}</strong> on {b.climb_date}? This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Keep Booking</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDeleteBooking(b.id)}
+                          className="bg-red-600 text-white hover:bg-red-700 rounded-xl font-bold"
+                        >
+                          Yes, Delete Permanently
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
             );
@@ -584,6 +666,22 @@ export default function MyBookings() {
 
               {/* Content */}
               <div className="p-6 overflow-y-auto space-y-6">
+                {selectedBooking.status === "approved" && (
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3 text-xs text-emerald-950">
+                    <div className="p-1.5 rounded-xl bg-emerald-100 text-emerald-800 shrink-0 mt-0.5">
+                      <Building2 className="w-4 h-4 text-emerald-700" />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-emerald-950 text-xs">
+                        Official Notice: Pay & Claim Permit at DENR NNNP Office
+                      </h4>
+                      <p className="text-emerald-800 mt-0.5 leading-relaxed">
+                        Your booking has been approved by the park administrator! Please proceed to the <strong>DENR NNNP Office</strong> to pay the required fee and claim your official paper trekking permit before your climb date.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Details Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100">
@@ -660,17 +758,51 @@ export default function MyBookings() {
               </div>
 
               {/* Footer */}
-              <div className="p-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
-                <button
-                  onClick={() => {
-                    const b = selectedBooking;
-                    setSelectedBooking(null);
-                    openVoucher(b);
-                  }}
-                  className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition"
-                >
-                  <Printer className="w-3.5 h-3.5" /> View / Print Voucher
-                </button>
+              <div className="p-4 border-t border-gray-100 bg-gray-50 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const b = selectedBooking;
+                      setSelectedBooking(null);
+                      openVoucher(b);
+                    }}
+                    className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition"
+                  >
+                    <Printer className="w-3.5 h-3.5" /> View / Print Voucher
+                  </button>
+
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <button
+                        disabled={deletingId === selectedBooking.id}
+                        className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        {deletingId === selectedBooking.id ? "Deleting..." : "Delete Booking"}
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="bg-white rounded-2xl">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="text-red-600 flex items-center gap-2">
+                          <Trash2 className="w-5 h-5" /> Delete Trekking Booking
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to permanently delete this booking for <strong>{selectedBooking.trails?.name}</strong> on {selectedBooking.climb_date}? This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Keep Booking</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDeleteBooking(selectedBooking.id)}
+                          className="bg-red-600 text-white hover:bg-red-700 rounded-xl font-bold"
+                        >
+                          Yes, Delete Permanently
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+
                 <button
                   onClick={() => setSelectedBooking(null)}
                   className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-100 px-4 py-2 rounded-xl text-xs font-bold transition"
@@ -700,6 +832,7 @@ export default function MyBookings() {
           booking={{
             id: reviewBooking.id,
             userId: user!.id,
+            userName: profile?.full_name || (user?.user_metadata?.full_name as string) || user?.email?.split("@")[0] || "Verified Trekker",
             guideId: (reviewBooking as any).guide_id,
             guideName: reviewBooking.guides?.name,
             trailId: reviewBooking.trail_id,

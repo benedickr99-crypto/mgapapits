@@ -7,16 +7,6 @@ import { useEffect } from "react";
 
 export default function Home() {
   const scrollRef = useScrollAnimation();
-  const { user, profile, refreshProfile } = useAuth();
-
-  useEffect(() => {
-    const email = user?.email?.toLowerCase() || "";
-    if (email === "benedickluiser@gmail.com" && profile && profile.role !== "admin") {
-      supabase.from("profiles").update({ role: "admin" }).eq("id", user!.id).then(() => {
-        refreshProfile();
-      });
-    }
-  }, [user, profile?.role, refreshProfile]);
 
   return (
     <div ref={scrollRef} className="bg-gray-50 text-gray-800">
@@ -95,22 +85,22 @@ export default function Home() {
           {[
             {
               name: "Kumalisikis Trail",
-              desc: "A beginner-friendly trail with gradual elevation and scenic forest views. Suitable for first-time trekkers looking for a light to moderate challenge.",
+              desc: "A beginner-friendly trail with gradual elevation and scenic forest views. Suitable for first-time trekkers and nature enthusiasts.",
               img: "/images/trails/kumalisikis.jpg",
             },
             {
               name: "Mt. Mandalagan (Patag)",
-              desc: "A moderately challenging trail featuring diverse terrain, including forests and sulfur vents. Ideal for trekkers with some hiking experience.",
+              desc: "A captivating trail featuring diverse terrain, including lush forests and sulfur vents. Ideal for trekkers with hiking experience.",
               img: "/images/trails/mt-mandalagan.jpg",
             },
             {
               name: "Mt. Marapara",
-              desc: "A difficult trail with steep ascents and rugged paths. Recommended for experienced trekkers seeking a physically demanding adventure.",
+              desc: "A trail with steep ascents and rugged paths. Recommended for seasoned trekkers seeking an adventurous mountain journey.",
               img: "/images/trails/mt-marapara.jpg",
             },
             {
               name: "Mt. Silay",
-              desc: "A challenging trail with long trekking hours, river crossings, and dense vegetation. Best suited for well-prepared hikers.",
+              desc: "A trail with scenic trekking hours, river crossings, and dense vegetation. Best suited for well-prepared hikers.",
               img: "/images/trails/mt-silay.jpg",
             },
           ].map((trail, index) => (

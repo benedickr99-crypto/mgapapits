@@ -12,12 +12,6 @@ export const isAdmin = async () => {
     return false;
   }
 
-  const email = user.email?.toLowerCase() || "";
-  // ONLY benedickluiser@gmail.com is allowed as admin
-  if (email !== "benedickluiser@gmail.com") {
-    return false;
-  }
-
   // 🔍 Check role in database
   const { data, error } = await supabase
     .from("profiles")
@@ -26,9 +20,8 @@ export const isAdmin = async () => {
     .single();
 
   if (error) {
-    console.error("Role error:", error.message);
-    return true;
+    return false;
   }
 
-  return data?.role === "admin" || email === "benedickluiser@gmail.com";
+  return data?.role === "admin";
 };

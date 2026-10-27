@@ -14,6 +14,7 @@ interface BookingVoucherProps {
     climbDate: string;
     timeSlot: string;
     groupSize: number;
+    status?: string;
     guideName?: string;
     emergencyContactName: string;
     emergencyContactPhone: string;
@@ -24,6 +25,7 @@ interface BookingVoucherProps {
 export const BookingVoucherModal = ({ isOpen, onClose, booking }: BookingVoucherProps) => {
   const printRef = useRef<HTMLDivElement>(null);
   const metadata = getTrailMetadata(booking.trailName);
+  const isApproved = booking.status === "approved" || booking.status === "confirmed";
 
   const handlePrint = () => {
     window.print();
@@ -64,11 +66,34 @@ export const BookingVoucherModal = ({ isOpen, onClose, booking }: BookingVoucher
             </div>
             <div className="text-right sm:border-l sm:border-emerald-700/60 sm:pl-4">
               <span className="text-xs text-emerald-200 uppercase tracking-wider font-semibold">Status</span>
-              <div className="text-sm font-bold bg-amber-400/20 text-amber-300 px-3 py-1 rounded-full border border-amber-400/30 inline-block mt-1">
-                Pending Verification
+              <div
+                className={`text-sm font-bold px-3 py-1 rounded-full border inline-block mt-1 ${
+                  isApproved
+                    ? "bg-emerald-400/25 text-emerald-200 border-emerald-400/40"
+                    : "bg-amber-400/20 text-amber-300 border-amber-400/30"
+                }`}
+              >
+                {isApproved ? "Approved by DENR" : "Pending Verification"}
               </div>
             </div>
           </div>
+
+          {/* Office Payment & Permit Claim Notice */}
+          {isApproved && (
+            <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-4 flex items-start gap-3 shadow-xs">
+              <div className="p-2 bg-emerald-100 text-emerald-800 rounded-xl shrink-0 mt-0.5">
+                <ShieldCheck className="w-5 h-5 text-emerald-700" />
+              </div>
+              <div className="text-xs text-emerald-950">
+                <h4 className="font-black text-sm text-emerald-950 mb-0.5">
+                  Official Notice: Pay & Claim Permit at DENR NNNP Office
+                </h4>
+                <p className="text-emerald-800 leading-relaxed">
+                  Your booking has been officially approved! Please proceed to the <strong>DENR NNNP Office</strong> to settle the trekking fees and claim your official paper permit. Present this voucher reference number: <strong className="font-mono text-emerald-950 font-bold">{booking.referenceNumber}</strong>.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Booking Summary Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
@@ -89,12 +114,14 @@ export const BookingVoucherModal = ({ isOpen, onClose, booking }: BookingVoucher
                 Date & Schedule
               </div>
               <div className="font-bold text-gray-900 text-base">
-                {new Date(booking.climbDate).toLocaleDateString("en-US", {
-                  weekday: "short",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
+                {!isNaN(new Date(booking.climbDate).getTime())
+                  ? new Date(booking.climbDate).toLocaleDateString("en-US", {
+                      weekday: "short",
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })
+                  : booking.climbDate}
               </div>
               <div className="text-xs text-gray-600 flex items-center gap-1">
                 <Clock className="w-3.5 h-3.5 text-emerald-600" /> {booking.timeSlot}

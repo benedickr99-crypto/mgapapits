@@ -5,6 +5,7 @@ import type { User, Session } from "@supabase/supabase-js";
 export type Profile = {
   id: string;
   full_name: string | null;
+  email?: string | null;
   phone: string | null;
   role: string;
   nationality: string | null;
@@ -67,16 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return null;
     try {
       const raw = localStorage.getItem("nnnp_auth_profile");
-      const p = raw ? JSON.parse(raw) : null;
-      const userRaw = localStorage.getItem("nnnp_auth_user");
-      const u = userRaw ? JSON.parse(userRaw) : null;
-      const email = u?.email?.toLowerCase() || "";
-      if (email === "benedickluiser@gmail.com") {
-        if (p) return { ...p, role: "admin" };
-      } else if (p && p.role === "admin") {
-        return { ...p, role: "trekker" };
-      }
-      return p;
+      return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
     }
@@ -139,16 +131,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (error) {
-        if (
-          (error as any).status === 401 ||
-          (error as any).code === "PGRST301" ||
-          error.message?.toLowerCase().includes("jwt")
-        ) {
-          console.warn("Session token expired or unauthorized. Clearing credentials.");
-          signOut().catch(() => {});
-        } else {
-          console.error("Error fetching profile:", error);
-        }
+        console.warn("Could not fetch latest profile from DB:", error.message);
+        // Keep user logged in with cached profile rather than forcefully signing out
         return null;
       }
       return data as Profile;
@@ -160,46 +144,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const handleProfileSync = async (currentUser: User, rawProfile: Profile | null) => {
     let profileData = rawProfile;
-    const email = currentUser.email?.toLowerCase() || "";
-    
-    // Auto-promote system admin accounts (ONLY benedickluiser@gmail.com)
-    const isTargetAdmin = email === "benedickluiser@gmail.com";
 
-    if (isTargetAdmin) {
-      if (profileData?.role !== "admin") {
-        try {
-          await supabase.from("profiles").update({ role: "admin" as any }).eq("id", currentUser.id);
-          await supabase.auth.updateUser({ data: { role: "admin" } }).catch(() => {});
-          if (profileData) {
-            profileData = { ...profileData, role: "admin" };
-          } else {
-            profileData = {
-              id: currentUser.id,
-              full_name: currentUser.user_metadata?.full_name || "Admin",
-              phone: null,
-              role: "admin",
-              nationality: null,
-            };
-          }
-          try {
-            localStorage.setItem("nnnp_auth_profile", JSON.stringify(profileData));
-          } catch {}
-        } catch (e) {
-          console.error("Failed to promote admin:", e);
-        }
-      }
-    } else if (profileData?.role === "admin") {
-      // Revert any unauthorized admin accounts to trekker
-      try {
-        await supabase.from("profiles").update({ role: "trekker" as any }).eq("id", currentUser.id);
-        await supabase.auth.updateUser({ data: { role: "trekker" } }).catch(() => {});
-        profileData = { ...profileData, role: "trekker" };
-        try {
-          localStorage.setItem("nnnp_auth_profile", JSON.stringify(profileData));
-        } catch {}
-      } catch (e) {
-        console.error("Failed to demote unauthorized admin:", e);
-      }
+    // Role is purely database-driven — no hardcoded email/name overrides.
+    if (!profileData) {
+      // Create a minimal placeholder profile; the DB trigger should handle this,
+      // but if it hasn't fired yet, default new users to trekker.
+      profileData = {
+        id: currentUser.id,
+        full_name: (currentUser.user_metadata?.full_name as string) || currentUser.email?.split("@")[0] || "User",
+        phone: null,
+        role: "trekker",
+        nationality: null,
+      };
     }
     return profileData;
   };
@@ -219,91 +175,92 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
-    let authInitialized = false;
+
+    let lastToken = "";
 
     const processSession = async (currentSession: Session | null) => {
       const currentUser = currentSession?.user ?? null;
 
-      if (!isMounted) return;
+      if (!isMounted || !currentUser) return;
+
+      const token = currentSession?.access_token || currentUser.id;
+      if (token === lastToken) return;
+      lastToken = token;
+
       setSession(currentSession);
       setUser(currentUser);
 
-      if (currentUser) {
-        try {
-          localStorage.setItem("nnnp_auth_session", JSON.stringify(currentSession));
-          localStorage.setItem("nnnp_auth_user", JSON.stringify(currentUser));
-        } catch {}
+      try {
+        localStorage.setItem("nnnp_auth_session", JSON.stringify(currentSession));
+        localStorage.setItem("nnnp_auth_user", JSON.stringify(currentUser));
+      } catch {}
 
-        // Fetch / sync profile in background
-        const profileData = await fetchProfile(currentUser.id);
-        const synced = await handleProfileSync(currentUser, profileData);
+      // Fetch / sync profile in background
+      const profileData = await fetchProfile(currentUser.id);
+      const synced = await handleProfileSync(currentUser, profileData);
 
-        if (isMounted) {
-          if (synced) {
-            setProfile(synced);
-            try {
-              localStorage.setItem("nnnp_auth_profile", JSON.stringify(synced));
-            } catch {}
-          }
-          setLoading(false);
+      if (isMounted) {
+        if (synced) {
+          setProfile(synced);
+          try {
+            localStorage.setItem("nnnp_auth_profile", JSON.stringify(synced));
+          } catch {}
         }
-      } else {
-        try {
-          localStorage.removeItem("nnnp_auth_session");
-          localStorage.removeItem("nnnp_auth_user");
-          localStorage.removeItem("nnnp_auth_profile");
-        } catch {}
-
-        if (isMounted) {
-          setProfile(null);
-          setLoading(false);
-        }
+        setLoading(false);
       }
     };
 
-    // Listen for auth changes
+    // 1. Listen for Supabase auth state changes
     const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, currentSession) => {
-        authInitialized = true;
-        processSession(currentSession);
+      (event, currentSession) => {
+        if (!isMounted) return;
+
+        if (event === "SIGNED_OUT") {
+          // Explicit sign out: clear user state and storage
+          setUser(null);
+          setSession(null);
+          setProfile(null);
+          clearAuthStorage();
+          setLoading(false);
+        } else if (currentSession) {
+          // Valid session received: update user, session, profile & persist to localStorage
+          processSession(currentSession);
+        } else if (event === "INITIAL_SESSION") {
+          // If Supabase reports null on initial handshake:
+          // Check if we already have a cached user in localStorage.
+          // DO NOT wipe the user if we have a valid cached session!
+          const cachedUser = localStorage.getItem("nnnp_auth_user");
+          if (!cachedUser) {
+            setUser(null);
+            setSession(null);
+            setProfile(null);
+          }
+          setLoading(false);
+        }
       }
     );
 
-    // Initial session check
+    // 2. Initial session check & recovery
     supabase.auth
       .getSession()
       .then(({ data, error }) => {
-        if (error) {
-          if (
-            error.message?.toLowerCase().includes("refresh token") ||
-            (error as any).status === 400
-          ) {
-            // Stale or invalid refresh token in storage: clean up so browser stops retrying with 400
-            supabase.auth.signOut().catch(() => {});
-            try {
-              for (let i = localStorage.length - 1; i >= 0; i--) {
-                const k = localStorage.key(i);
-                if (k && k.startsWith("sb-") && k.endsWith("-auth-token")) {
-                  localStorage.removeItem(k);
-                }
-              }
-            } catch {}
-          }
-        }
-        if (!authInitialized) {
-          processSession(data?.session ?? null);
+        if (!isMounted) return;
+        if (!error && data?.session) {
+          processSession(data.session);
+        } else if (error) {
+          console.warn("getSession notice:", error.message);
+          // Do NOT clearAuthStorage() here! Network glitches or lock timeouts must NOT log user out.
         }
       })
       .catch((err) => {
-        if (err?.message?.toLowerCase().includes("refresh token")) {
-          supabase.auth.signOut().catch(() => {});
-        }
-        if (!authInitialized) {
-          processSession(null);
-        }
+        console.warn("getSession error:", err);
+        // Do NOT clearAuthStorage() here!
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false);
       });
 
-    // Safety timeout: Never stay stuck on loading for more than 1.5 seconds
+    // 3. Safety timeout: Never stay stuck on loading for more than 1.5 seconds
     const timeout = setTimeout(() => {
       if (isMounted) setLoading(false);
     }, 1500);
@@ -316,10 +273,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
 
-  const userEmail = user?.email?.toLowerCase() || "";
-  const isAdmin = userEmail === "benedickluiser@gmail.com";
+  // Role is purely determined by the database profile.role value — no overrides.
+  const isAdmin = profile?.role === "admin";
   const isGuide = !isAdmin && profile?.role === "guide";
-  const role = isAdmin ? "admin" : (profile?.role === "admin" ? "trekker" : (profile?.role ?? null));
+  const role = profile?.role || "trekker";
 
   return (
     <AuthContext.Provider

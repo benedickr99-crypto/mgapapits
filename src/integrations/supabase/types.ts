@@ -223,6 +223,7 @@ export type Database = {
           bio: string | null
           certifications: string | null
           created_at: string
+          email: string | null
           experience_years: number | null
           full_name: string | null
           guide_application_status: string | null
@@ -238,6 +239,7 @@ export type Database = {
           bio?: string | null
           certifications?: string | null
           created_at?: string
+          email?: string | null
           experience_years?: number | null
           full_name?: string | null
           guide_application_status?: string | null
@@ -253,6 +255,7 @@ export type Database = {
           bio?: string | null
           certifications?: string | null
           created_at?: string
+          email?: string | null
           experience_years?: number | null
           full_name?: string | null
           guide_application_status?: string | null

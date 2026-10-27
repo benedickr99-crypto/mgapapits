@@ -32,7 +32,11 @@ export function useNotifications() {
       .limit(50); // Keep it lightweight
 
     if (error) {
-      if ((error as any).status === 401 || (error as any).code === "PGRST301") {
+      if (
+        (error as any).status === 401 ||
+        (error as any).code === "PGRST301" ||
+        error.message?.toLowerCase().includes("fetch")
+      ) {
         return;
       }
       console.error("Error fetching notifications:", error);
@@ -43,12 +47,12 @@ export function useNotifications() {
       setNotifications(data as Notification[]);
       setUnreadCount(data.filter((n) => !n.read).length);
     }
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     fetchNotifications();
 
-    if (!user) return;
+    if (!user?.id) return;
 
     // Real-time subscription to notifications targeting this specific user
     const channel = supabase
@@ -81,7 +85,7 @@ export function useNotifications() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, fetchNotifications]);
+  }, [user?.id, fetchNotifications]);
 
   // Mark a single notification as read
   const markAsRead = async (id: string) => {

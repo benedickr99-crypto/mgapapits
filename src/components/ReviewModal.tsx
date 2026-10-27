@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Star, MessageSquare } from "lucide-react";
@@ -20,14 +20,35 @@ interface ReviewModalProps {
 }
 
 export const ReviewModal = ({ isOpen, onClose, booking, onSuccess }: ReviewModalProps) => {
-  const [trailRating, setTrailRating] = useState(5);
-  const [guideRating, setGuideRating] = useState(5);
-  const [overallRating, setOverallRating] = useState(5);
+  const [trailRating, setTrailRating] = useState(0);
+  const [guideRating, setGuideRating] = useState(0);
+  const [overallRating, setOverallRating] = useState(0);
   const [feedback, setFeedback] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (isOpen) {
+      setTrailRating(0);
+      setGuideRating(0);
+      setOverallRating(0);
+      setFeedback("");
+    }
+  }, [isOpen]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (trailRating === 0) {
+      alert("Please provide a star rating for the trail experience.");
+      return;
+    }
+    if (booking.guideId && guideRating === 0) {
+      alert("Please provide a star rating for the tour guide service.");
+      return;
+    }
+    if (overallRating === 0) {
+      alert("Please provide an overall park satisfaction rating.");
+      return;
+    }
     if (!feedback.trim()) {
       alert("Please provide a brief feedback comment.");
       return;

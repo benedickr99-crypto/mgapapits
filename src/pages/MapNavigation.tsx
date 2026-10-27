@@ -66,7 +66,7 @@ export default function MapNavigation() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent flex items-end p-5">
                 <div>
                   <span className="text-xs font-bold text-white bg-emerald-700/90 px-3 py-1 rounded-full uppercase tracking-wider">
-                    {trail.difficulty} • {trail.elevation}
+                    {trail.elevation}
                   </span>
                   <h2 className="text-xl sm:text-2xl font-black text-white mt-1.5 drop-shadow-sm">{trail.name}</h2>
                 </div>
@@ -123,14 +123,10 @@ export default function MapNavigation() {
             </div>
 
             {/* Trail Quick Specs */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
               <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
                 <span className="text-gray-400 block font-semibold">Elevation</span>
                 <span className="font-bold text-gray-900">{trail.elevation}</span>
-              </div>
-              <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                <span className="text-gray-400 block font-semibold">Difficulty</span>
-                <span className="font-bold text-gray-900">{trail.difficulty}</span>
               </div>
               <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
                 <span className="text-gray-400 block font-semibold">Trail Length</span>

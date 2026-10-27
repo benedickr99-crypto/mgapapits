@@ -113,14 +113,26 @@ export async function fetchAvailableGuides(date: string, timeSlot?: string) {
       .neq("status", "cancelled")
       .neq("status", "rejected");
 
-    // 3. Mark availability: if guide has booking on that date
-    const bookedGuideIds = new Set((bookedGuides || []).map((b: any) => b.guide_id));
+    // 3. Fetch guides who marked themselves off-duty for that date in guide_availability
+    const { data: offRecords } = await supabase
+      .from("guide_availability")
+      .select("guide_id")
+      .eq("available_date", date)
+      .eq("status", "off");
 
-    return guides.map((guide) => ({
-      ...guide,
-      isAvailable: !bookedGuideIds.has(guide.id),
-      conflictCount: (bookedGuides || []).filter((b: any) => b.guide_id === guide.id).length,
-    }));
+    const bookedGuideIds = new Set((bookedGuides || []).map((b: any) => b.guide_id));
+    const offGuideIds = new Set((offRecords || []).map((g: any) => g.guide_id));
+
+    return guides.map((guide) => {
+      const isBooked = bookedGuideIds.has(guide.id);
+      const isOffDuty = offGuideIds.has(guide.id);
+      return {
+        ...guide,
+        isAvailable: !isBooked && !isOffDuty,
+        isOffDuty,
+        conflictCount: (bookedGuides || []).filter((b: any) => b.guide_id === guide.id).length,
+      };
+    });
   } catch (err) {
     console.warn("fetchAvailableGuides error:", err);
     return [];
@@ -242,7 +254,7 @@ export async function createOnlineBooking(submission: BookingSubmission) {
       user_id: submission.userId,
       title: "Booking Submitted",
       message: `Your booking (Permit: ${referenceNumber}) for ${submission.trailName || "Trail"} on ${submission.trekkingDate} (${submission.timeSlot}) has been registered and is pending DENR review.`,
-      type: "booking",
+      type: "booking_created",
       read: false,
     });
   } catch (notifErr) {
@@ -515,6 +527,7 @@ export const DEFAULT_REVIEWS: RatingReviewItem[] = [
 
 // Fetch Ratings & Reviews with database-first priority
 export async function fetchReviews(): Promise<RatingReviewItem[]> {
+  let dbReviews: RatingReviewItem[] = [];
   try {
     const { data, error } = await (supabase as any)
       .from("ratings_reviews")
@@ -522,20 +535,47 @@ export async function fetchReviews(): Promise<RatingReviewItem[]> {
       .eq("is_approved", true)
       .order("created_at", { ascending: false });
 
-    if (!error && data && data.length > 0) {
-      return data;
+    if (!error && Array.isArray(data) && data.length > 0) {
+      dbReviews = data.map((r: any) => ({
+        id: r.id,
+        booking_id: r.booking_id,
+        user_id: r.user_id,
+        user_name: r.user_name || (r.is_anonymous ? "Anonymous Trekker" : "Verified Trekker"),
+        guide_id: r.guide_id || null,
+        guide_name: r.guide_name || null,
+        trail_id: r.trail_id,
+        trail_name: r.trail_name || "NNNP Trail",
+        trail_rating: Number(r.trail_rating) || 5,
+        guide_rating: r.guide_rating ? Number(r.guide_rating) : undefined,
+        overall_rating: Number(r.overall_rating) || 5,
+        feedback_text: r.feedback_text || "",
+        created_at: r.created_at || new Date().toISOString(),
+      }));
     }
-  } catch (err) {}
+  } catch (err) {
+    // database fallback
+  }
 
+  let localReviews: RatingReviewItem[] = [];
   try {
     const local = localStorage.getItem("nnnp_custom_reviews");
     if (local) {
-      const custom = JSON.parse(local);
-      return [...custom, ...DEFAULT_REVIEWS];
+      localReviews = JSON.parse(local);
     }
   } catch (e) {}
 
-  return DEFAULT_REVIEWS;
+  // Merge unique reviews by id
+  const combined = [...localReviews, ...dbReviews, ...DEFAULT_REVIEWS];
+  const seen = new Set<string>();
+  const uniqueReviews: RatingReviewItem[] = [];
+  for (const item of combined) {
+    if (item && item.id && !seen.has(item.id)) {
+      seen.add(item.id);
+      uniqueReviews.push(item);
+    }
+  }
+
+  return uniqueReviews;
 }
 
 // Submit a Review directly to database
@@ -600,3 +640,26 @@ export async function submitReview(review: {
 
   return item;
 }
+
+// Delete Trekking Booking by trekker or admin
+export async function deleteBooking(bookingId: string) {
+  // 1. Try delete_booking RPC
+  try {
+    const { error: rpcError } = await (supabase as any).rpc("delete_booking", {
+      p_booking_id: bookingId,
+    });
+    if (!rpcError) return true;
+  } catch {}
+
+  // 2. Direct delete fallback
+  const { error: directError } = await supabase
+    .from("bookings")
+    .delete()
+    .eq("id", bookingId);
+
+  if (directError) {
+    throw directError;
+  }
+  return true;
+}
+

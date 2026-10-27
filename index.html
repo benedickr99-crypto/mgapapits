@@ -20,6 +20,22 @@
   <meta property="og:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/04be2ff1-921e-4da5-a3e1-dcde760579f3/id-preview-a51ca8a6--bde40644-b481-4e71-afc2-70d6795402d5.lovable.app-1776453240359.png">
   <meta name="twitter:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/04be2ff1-921e-4da5-a3e1-dcde760579f3/id-preview-a51ca8a6--bde40644-b481-4e71-afc2-70d6795402d5.lovable.app-1776453240359.png">
   <meta name="twitter:card" content="summary_large_image">
+  <script>
+    (function() {
+      try {
+        // Purge old obsolete project keys from past migrations if any, without touching active session
+        var legacyProject = 'htlhflhvwkrekornxpem';
+        for (var i = localStorage.length - 1; i >= 0; i--) {
+          var key = localStorage.key(i);
+          if (key && key.indexOf(legacyProject) !== -1) {
+            localStorage.removeItem(key);
+          }
+        }
+        // Purge old cached trails so deleted trails disappear immediately
+        localStorage.removeItem('nnnp_trails');
+      } catch (e) {}
+    })();
+  </script>
 </head>
   <body>
     <div id="root"></div>

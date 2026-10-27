@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   Plus, Edit2, CheckCircle, XCircle, Phone, Clock,
   FileText, ZoomIn, AlertTriangle, ShieldCheck, ShieldX,
-  ExternalLink, Loader2, Bell
+  ExternalLink, Loader2, Bell, Mail, MapPin, Download
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -12,6 +12,8 @@ type GuideProfile = {
   full_name: string | null;
   experience_years: number | null;
   phone: string | null;
+  email?: string | null;
+  address?: string | null;
   bio: string | null;
   certifications?: string | null;
   image_url: string | null;
@@ -19,6 +21,7 @@ type GuideProfile = {
   role: string | null;
   guide_application_status?: string | null;
   guide_id_url?: string | null;
+  rejection_reason?: string | null;
   created_at?: string;
 };
 
@@ -83,12 +86,20 @@ function ReviewModal({
               <h2 className="text-base font-black text-gray-900">
                 Review Application — {applicant.full_name || "Applicant"}
               </h2>
-              <p className="text-xs text-amber-600 font-semibold">⏳ Pending Review</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  Role: Tour Guide
+                </span>
+                <span className="text-xs text-amber-800 font-bold bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                  Application Status: Pending Review
+                </span>
+              </div>
             </div>
           </div>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-red-500 transition p-1.5 rounded-xl hover:bg-red-50"
+            title="Close"
           >
             <XCircle size={22} />
           </button>
@@ -96,16 +107,35 @@ function ReviewModal({
 
         <div className="p-6 space-y-6 flex-1">
 
-          {/* Applicant Info */}
-          <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-2xl p-4 text-xs">
+          {/* Applicant Info Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50 rounded-2xl p-4 text-xs border border-gray-100">
             <div>
               <p className="text-gray-500 uppercase tracking-wider font-bold text-[10px] mb-0.5">Full Name</p>
               <p className="text-gray-900 font-semibold">{applicant.full_name || "—"}</p>
             </div>
             <div>
-              <p className="text-gray-500 uppercase tracking-wider font-bold text-[10px] mb-0.5">Phone</p>
-              <p className="text-gray-900 font-semibold flex items-center gap-1">
-                <Phone size={11} /> {applicant.phone || "Not provided"}
+              <p className="text-gray-500 uppercase tracking-wider font-bold text-[10px] mb-0.5">Role Applied</p>
+              <p className="text-emerald-700 font-bold">Tour Guide</p>
+            </div>
+            <div>
+              <p className="text-gray-500 uppercase tracking-wider font-bold text-[10px] mb-0.5">Email Address</p>
+              <p className="text-gray-900 font-semibold flex items-center gap-1.5 truncate">
+                <Mail size={12} className="text-gray-400 shrink-0" />
+                <span>{applicant.email || "Not specified in profile"}</span>
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 uppercase tracking-wider font-bold text-[10px] mb-0.5">Phone Number</p>
+              <p className="text-gray-900 font-semibold flex items-center gap-1.5">
+                <Phone size={12} className="text-gray-400 shrink-0" />
+                <span>{applicant.phone || "Not provided"}</span>
+              </p>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="text-gray-500 uppercase tracking-wider font-bold text-[10px] mb-0.5">Home Address</p>
+              <p className="text-gray-900 font-semibold flex items-center gap-1.5">
+                <MapPin size={12} className="text-gray-400 shrink-0" />
+                <span>{applicant.address || "Not provided"}</span>
               </p>
             </div>
             <div>
@@ -113,21 +143,21 @@ function ReviewModal({
               <p className="text-gray-900 font-semibold">{applicant.experience_years || 0} years</p>
             </div>
             <div>
-              <p className="text-gray-500 uppercase tracking-wider font-bold text-[10px] mb-0.5">Applied</p>
+              <p className="text-gray-500 uppercase tracking-wider font-bold text-[10px] mb-0.5">Date Applied</p>
               <p className="text-gray-900 font-semibold">
                 {applicant.created_at
-                  ? new Date(applicant.created_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })
+                  ? new Date(applicant.created_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })
                   : "—"}
               </p>
             </div>
             {applicant.certifications && (
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <p className="text-gray-500 uppercase tracking-wider font-bold text-[10px] mb-0.5">Certifications</p>
                 <p className="text-gray-900 font-semibold">{applicant.certifications}</p>
               </div>
             )}
             {applicant.bio && (
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <p className="text-gray-500 uppercase tracking-wider font-bold text-[10px] mb-0.5">Bio / Background</p>
                 <p className="text-gray-700 italic">"{applicant.bio}"</p>
               </div>
@@ -136,46 +166,90 @@ function ReviewModal({
 
           {/* Submitted Document */}
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <FileText size={16} className="text-amber-600" />
-              <h3 className="text-sm font-black text-gray-800">Submitted ID / Certificate</h3>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <FileText size={16} className="text-amber-600" />
+                <h3 className="text-sm font-black text-gray-800">Guide ID / Accreditation Certificate</h3>
+              </div>
+              {applicant.guide_id_url && (
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                  Status: Uploaded
+                </span>
+              )}
             </div>
 
             {applicant.guide_id_url ? (
               <div className="border-2 border-amber-200 rounded-2xl overflow-hidden bg-amber-50">
                 {isImage ? (
-                  <div className="relative group">
-                    <img
-                      src={applicant.guide_id_url}
-                      alt="Guide ID Certificate"
-                      className="w-full max-h-72 object-contain bg-white"
-                    />
-                    <a
-                      href={applicant.guide_id_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition"
-                    >
-                      <span className="opacity-0 group-hover:opacity-100 flex items-center gap-2 bg-white/90 text-gray-800 font-bold text-xs px-4 py-2 rounded-full shadow transition">
-                        <ZoomIn size={14} /> View Full Size
-                      </span>
-                    </a>
-                  </div>
-                ) : (
-                  <div className="p-5 flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
-                      <FileText size={28} className="text-amber-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-800">PDF Document Uploaded</p>
-                      <p className="text-xs text-gray-500 mb-2">Click below to open and review the document</p>
+                  <div>
+                    <div className="relative group bg-white p-2">
+                      <img
+                        src={applicant.guide_id_url}
+                        alt="Guide ID Certificate"
+                        className="w-full max-h-72 object-contain bg-white rounded-xl"
+                      />
                       <a
                         href={applicant.guide_id_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-700 hover:text-amber-900 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition"
+                        className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition rounded-xl"
+                      >
+                        <span className="opacity-0 group-hover:opacity-100 flex items-center gap-2 bg-white/95 text-gray-800 font-bold text-xs px-4 py-2 rounded-full shadow-lg transition">
+                          <ZoomIn size={14} /> View Full Size
+                        </span>
+                      </a>
+                    </div>
+                    <div className="p-3 bg-amber-50/80 border-t border-amber-200 flex items-center justify-between text-xs">
+                      <span className="text-amber-900 font-medium">Accreditation Certificate Image</span>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={applicant.guide_id_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-bold text-amber-700 hover:text-amber-900 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition"
+                        >
+                          <ExternalLink size={12} /> Open in New Tab
+                        </a>
+                        <a
+                          href={applicant.guide_id_url}
+                          download="tour-guide-certificate"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-100 hover:bg-emerald-200 px-3 py-1.5 rounded-lg transition"
+                        >
+                          <Download size={12} /> Download
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-5 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+                        <FileText size={28} className="text-amber-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-800">PDF Document Uploaded</p>
+                        <p className="text-xs text-gray-500">Official Guide ID / Accreditation PDF file</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={applicant.guide_id_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-800 hover:text-amber-950 bg-amber-200/80 hover:bg-amber-300 px-3 py-2 rounded-xl transition"
                       >
                         <ExternalLink size={13} /> Open Document
+                      </a>
+                      <a
+                        href={applicant.guide_id_url}
+                        download="tour-guide-certificate.pdf"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-200/80 hover:bg-emerald-300 px-3 py-2 rounded-xl transition"
+                      >
+                        <Download size={13} /> Download
                       </a>
                     </div>
                   </div>
@@ -186,7 +260,7 @@ function ReviewModal({
                 <AlertTriangle size={20} className="text-red-500 flex-shrink-0" />
                 <div>
                   <p className="text-sm font-bold text-red-800">No Document Submitted</p>
-                  <p className="text-xs text-red-600">This applicant did not upload an ID or certificate. Consider requesting documents before approving.</p>
+                  <p className="text-xs text-red-600">This applicant did not upload an accreditation certificate. You can reject or request documents.</p>
                 </div>
               </div>
             )}
@@ -194,7 +268,13 @@ function ReviewModal({
 
           {/* Action Buttons (Step 1) */}
           {action === "idle" && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-gray-100">
+              <button
+                onClick={() => setAction("approve")}
+                className="flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md transition"
+              >
+                <ShieldCheck size={18} /> Approve Application
+              </button>
               <button
                 onClick={() => setAction("reject")}
                 className="flex items-center justify-center gap-2 py-3 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 font-bold text-sm border-2 border-red-200 transition"
@@ -202,10 +282,10 @@ function ReviewModal({
                 <ShieldX size={18} /> Reject Application
               </button>
               <button
-                onClick={() => setAction("approve")}
-                className="flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md transition"
+                onClick={onClose}
+                className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-sm border border-gray-200 transition"
               >
-                <ShieldCheck size={18} /> Approve as Guide
+                <Clock size={16} /> Keep Pending
               </button>
             </div>
           )}
@@ -259,7 +339,7 @@ function ReviewModal({
                 <h4 className="font-black text-red-800 text-sm">Reject Application</h4>
               </div>
               <p className="text-xs text-red-700">
-                Rejecting will send a notification to <strong>{applicant.full_name}</strong> with your reason.
+                Rejecting will record the reason in the database and notify <strong>{applicant.full_name}</strong>.
               </p>
               <div>
                 <label className="block text-xs font-bold text-red-800 mb-1">
@@ -267,7 +347,7 @@ function ReviewModal({
                 </label>
                 <textarea
                   rows={3}
-                  placeholder="e.g. Submitted ID is unclear / expired. Please resubmit a valid DENR accreditation certificate or government-issued ID..."
+                  placeholder="e.g. Submitted ID is unclear or expired. Please resubmit a valid DENR accreditation certificate or government-issued ID..."
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   className="w-full border border-red-300 rounded-xl p-3 text-xs focus:ring-2 focus:ring-red-400 outline-none resize-none bg-white"
@@ -381,29 +461,41 @@ export default function AdminGuides() {
   useEffect(() => {
     fetchGuides();
 
-    // Real-time subscription: alert admin when a new guide applicant registers
+    // 1. Real-time subscription listening to all changes on profiles table
     const channel = supabase
-      .channel("guide_applicants_watch")
+      .channel("admin_guide_applicants_channel")
       .on(
         "postgres_changes",
         {
-          event: "UPDATE",
+          event: "*",
           schema: "public",
           table: "profiles",
-          filter: "guide_application_status=eq.pending",
         },
-        () => {
-          setNewApplicantAlert(true);
+        (payload) => {
           fetchGuides();
-          toast("📋 New Tour Guide Applicant!", {
-            description: "A new tour guide application is pending your review.",
-          });
+          const rec = payload.new as any;
+          if (
+            rec &&
+            (rec.guide_application_status === "pending" ||
+              (rec.role === "guide" && rec.is_available === false && rec.guide_application_status !== "approved"))
+          ) {
+            setNewApplicantAlert(true);
+            toast("📋 New Tour Guide Application Submitted!", {
+              description: `${rec.full_name || "A new applicant"} submitted credentials for Tour Guide review.`,
+            });
+          }
         }
       )
       .subscribe();
 
+    // 2. Periodic polling fallback (every 6 seconds) to ensure real-time consistency
+    const pollInterval = setInterval(() => {
+      fetchGuides();
+    }, 6000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
   }, []);
 
@@ -454,13 +546,26 @@ export default function AdminGuides() {
         ? `Congratulations! Your application to become an Accredited NNNP Tour Guide has been APPROVED. Admin note: ${notes}`
         : "Congratulations! Your application to become an Accredited NNNP Tour Guide has been APPROVED by DENR NNNP Admin. You can now access your Guide Dashboard.";
 
-      await supabase.from("notifications").insert({
-        user_id: applicant.id,
-        title: "🎉 Tour Guide Application APPROVED!",
-        message,
-        type: "guide_approval",
-        link: "/guide-dashboard",
-      });
+      try {
+        const { error: notifErr } = await supabase.from("notifications").insert({
+          user_id: applicant.id,
+          title: "🎉 Tour Guide Application APPROVED!",
+          message,
+          type: "guide_approval",
+          link: "/guide-dashboard",
+        });
+        if (notifErr) {
+          await supabase.from("notifications").insert({
+            user_id: applicant.id,
+            title: "🎉 Tour Guide Application APPROVED!",
+            message,
+            type: "booking_approved",
+            link: "/guide-dashboard",
+          });
+        }
+      } catch (e) {
+        console.warn("Tour guide approval notification skipped:", e);
+      }
 
       toast.success(`✅ ${applicant.full_name || "Applicant"} is now an Accredited Tour Guide!`);
       fetchGuides();
@@ -480,18 +585,32 @@ export default function AdminGuides() {
           role: "trekker" as any,
           is_available: false,
           guide_application_status: "rejected",
-        })
+          rejection_reason: reason,
+        } as any)
         .eq("id", applicant.id);
 
       if (error) throw error;
 
-      await supabase.from("notifications").insert({
-        user_id: applicant.id,
-        title: "Tour Guide Application — Not Approved",
-        message: `Your Tour Guide application has been reviewed and was not approved. Reason: ${reason}. You may reapply after addressing the concerns or contact DENR NNNP for guidance.`,
-        type: "guide_rejection",
-        link: "/profile",
-      });
+      try {
+        const { error: notifErr } = await supabase.from("notifications").insert({
+          user_id: applicant.id,
+          title: "Tour Guide Application — Not Approved",
+          message: `Your Tour Guide application has been reviewed and was not approved. Reason: ${reason}. You may reapply after addressing the concerns or contact DENR NNNP for guidance.`,
+          type: "guide_rejection",
+          link: "/profile",
+        });
+        if (notifErr) {
+          await supabase.from("notifications").insert({
+            user_id: applicant.id,
+            title: "Tour Guide Application — Not Approved",
+            message: `Your Tour Guide application has been reviewed and was not approved. Reason: ${reason}. You may reapply after addressing the concerns or contact DENR NNNP for guidance.`,
+            type: "booking_rejected",
+            link: "/profile",
+          });
+        }
+      } catch (e) {
+        console.warn("Tour guide rejection notification skipped:", e);
+      }
 
       toast.info(`Application for ${applicant.full_name || "Applicant"} was rejected.`);
       fetchGuides();
@@ -538,13 +657,26 @@ export default function AdminGuides() {
         const { error } = await supabase.from("profiles").update(payload).eq("id", selectedUserId);
         if (error) throw error;
 
-        await supabase.from("notifications").insert({
-          user_id: selectedUserId,
-          title: "🎉 Promoted to Accredited Tour Guide!",
-          message: "The Park Administrator has approved your accreditation as an Official NNNP Tour Guide.",
-          type: "guide_approval",
-          link: "/guide-dashboard",
-        });
+        try {
+          const { error: notifErr } = await supabase.from("notifications").insert({
+            user_id: selectedUserId,
+            title: "🎉 Promoted to Accredited Tour Guide!",
+            message: "The Park Administrator has approved your accreditation as an Official NNNP Tour Guide.",
+            type: "guide_approval",
+            link: "/guide-dashboard",
+          });
+          if (notifErr) {
+            await supabase.from("notifications").insert({
+              user_id: selectedUserId,
+              title: "🎉 Promoted to Accredited Tour Guide!",
+              message: "The Park Administrator has approved your accreditation as an Official NNNP Tour Guide.",
+              type: "booking_approved",
+              link: "/guide-dashboard",
+            });
+          }
+        } catch (e) {
+          console.warn("Tour guide promotion notification skipped:", e);
+        }
 
         toast.success("User promoted to Accredited Tour Guide!");
       }
@@ -627,7 +759,7 @@ export default function AdminGuides() {
 
                 <div className="p-5 flex flex-col flex-1">
                   {/* Identity row */}
-                  <div className="flex items-start justify-between gap-3 mb-4">
+                  <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-800 font-black text-xl flex items-center justify-center border-2 border-amber-200 flex-shrink-0">
                         {applicant.full_name?.charAt(0) || "?"}
@@ -636,63 +768,68 @@ export default function AdminGuides() {
                         <h4 className="font-bold text-gray-900 text-sm leading-tight">
                           {applicant.full_name || "Applicant"}
                         </h4>
-                        <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                          <Phone size={11} /> {applicant.phone || "No phone"}
-                        </p>
-                        {applicant.created_at && (
-                          <p className="text-[10px] text-gray-400 mt-0.5">
-                            Applied {new Date(applicant.created_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
-                          </p>
-                        )}
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            Role: Tour Guide
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    <span className="px-2.5 py-1 bg-amber-100 text-amber-800 rounded-lg text-[10px] font-black uppercase tracking-wider flex-shrink-0">
-                      Pending
+                    <span className="px-2.5 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-black uppercase tracking-wider flex-shrink-0">
+                      Pending Review
                     </span>
                   </div>
 
-                  {/* Quick info */}
-                  <div className="text-xs text-gray-600 space-y-1 mb-4 bg-gray-50 rounded-xl p-3">
-                    <p>
-                      <strong className="text-gray-800">Experience:</strong>{" "}
-                      {applicant.experience_years || 0} years
-                    </p>
-                    {applicant.certifications && (
-                      <p>
-                        <strong className="text-gray-800">Certs:</strong> {applicant.certifications}
+                  {/* Actual Registration Details */}
+                  <div className="text-xs text-gray-600 space-y-1.5 mb-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
+                    <div className="flex items-center gap-1.5 text-gray-700">
+                      <Phone size={12} className="text-gray-400 shrink-0" />
+                      <span><strong>Phone:</strong> {applicant.phone || "Not provided"}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-gray-700">
+                      <Mail size={12} className="text-gray-400 shrink-0" />
+                      <span className="truncate"><strong>Email:</strong> {applicant.email || "Not specified in profile"}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-gray-700">
+                      <MapPin size={12} className="text-gray-400 shrink-0" />
+                      <span className="truncate"><strong>Address:</strong> {applicant.address || "Not provided"}</span>
+                    </div>
+                    {applicant.created_at && (
+                      <p className="text-[10px] text-gray-400 pt-1 border-t border-gray-200">
+                        Applied {new Date(applicant.created_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </p>
                     )}
                   </div>
 
-                  {/* Document preview thumbnail */}
+                  {/* Guide ID / Accreditation Certificate Status */}
                   <div className="mb-4">
                     {applicant.guide_id_url ? (
-                      /\.(jpg|jpeg|png|gif|webp)$/i.test(applicant.guide_id_url) ? (
-                        <div className="relative rounded-xl overflow-hidden border border-amber-200 bg-amber-50 h-28">
-                          <img
-                            src={applicant.guide_id_url}
-                            alt="ID Preview"
-                            className="w-full h-full object-contain"
-                          />
-                          <div className="absolute inset-0 flex items-end justify-center pb-2 bg-gradient-to-t from-black/30 to-transparent">
-                            <span className="text-[10px] text-white font-bold bg-black/40 px-2 py-0.5 rounded-full">
-                              📎 ID/Certificate Attached
-                            </span>
-                          </div>
+                      <div className="rounded-xl overflow-hidden border border-amber-200 bg-amber-50 p-2.5">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[11px] font-bold text-emerald-800 flex items-center gap-1">
+                            <CheckCircle size={13} className="text-emerald-600" />
+                            Guide ID / Accreditation Certificate: <span className="underline ml-0.5">Uploaded</span>
+                          </span>
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl p-3">
-                          <FileText size={22} className="text-amber-500 flex-shrink-0" />
-                          <div>
-                            <p className="text-xs font-bold text-gray-700">PDF Document Uploaded</p>
-                            <p className="text-[10px] text-gray-400">Review in full-screen modal</p>
+                        {/\.(jpg|jpeg|png|gif|webp)$/i.test(applicant.guide_id_url) ? (
+                          <div className="relative rounded-lg overflow-hidden bg-white h-24 border border-amber-100">
+                            <img
+                              src={applicant.guide_id_url}
+                              alt="ID Preview"
+                              className="w-full h-full object-contain"
+                            />
                           </div>
-                        </div>
-                      )
+                        ) : (
+                          <div className="flex items-center gap-2 bg-white rounded-lg p-2 border border-amber-100">
+                            <FileText size={20} className="text-amber-600" />
+                            <span className="text-[11px] font-medium text-gray-700">PDF Certificate Document</span>
+                          </div>
+                        )}
+                      </div>
                     ) : (
-                      <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 rounded-xl p-3">
-                        <AlertTriangle size={18} className="text-red-400 flex-shrink-0" />
-                        <p className="text-xs font-semibold text-red-600">⚠️ No document submitted</p>
+                      <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-2.5">
+                        <AlertTriangle size={16} className="text-red-500 flex-shrink-0" />
+                        <p className="text-xs font-semibold text-red-600">No accreditation certificate uploaded</p>
                       </div>
                     )}
                   </div>
@@ -706,7 +843,7 @@ export default function AdminGuides() {
                       }}
                       className="w-full flex items-center justify-center gap-2 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-sm transition"
                     >
-                      <FileText size={14} /> Review Document & Decide
+                      <FileText size={14} /> Review Application
                     </button>
                   </div>
                 </div>

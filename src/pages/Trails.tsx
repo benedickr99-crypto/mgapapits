@@ -10,12 +10,7 @@ import { getTrailImage } from "@/lib/trailData";
 
 type Trail = Tables<"trails">;
 
-const getDifficultyColor = (level: string | null) => {
-  if (!level) return "bg-gray-500";
-  if (level.toLowerCase().includes("easy")) return "bg-green-500";
-  if (level.toLowerCase().includes("hard")) return "bg-red-500";
-  return "bg-yellow-500";
-};
+
 
 const Trails = () => {
   // ⚡ INSTANT LOAD from cache
@@ -103,16 +98,7 @@ const Trails = () => {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
 
-                  {/* BADGE */}
-                  {trail.difficulty && (
-                    <span
-                      className={`absolute top-4 left-4 text-xs font-semibold text-white px-3 py-1 rounded-full shadow-sm ${getDifficultyColor(
-                        trail.difficulty
-                      )}`}
-                    >
-                      {trail.difficulty}
-                    </span>
-                  )}
+
                 </div>
 
                 {/* CONTENT */}
@@ -134,7 +120,10 @@ const Trails = () => {
 
                   {trail.weekly_slots && (
                     <p className="text-xs text-gray-400 mt-2">
-                      Weekly slots: {trail.weekly_slots}
+                      {trail.name.toLowerCase().includes("kumalisikis") || trail.name.toLowerCase().includes("kumaliskis")
+                        ? "Weekly slots: "
+                        : "Monthly slots: "}
+                      {trail.weekly_slots}
                     </p>
                   )}
 

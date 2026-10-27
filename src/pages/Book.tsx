@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { useSearchParams, useNavigate } from "react-router-dom";
@@ -150,7 +150,6 @@ export default function Book() {
   const [guideId, setGuideId] = useState("");
   const [guides, setGuides] = useState<any[]>([]);
   const [fetchingGuides, setFetchingGuides] = useState(false);
-  const [autoAssignGuide, setAutoAssignGuide] = useState(false);
 
   // Group Information & Participants
   const [groupSize, setGroupSize] = useState(1);
@@ -183,11 +182,28 @@ export default function Book() {
   const [createdVoucher, setCreatedVoucher] = useState<any | null>(null);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
 
+  // Helper: Get Monday of a week
+  const getMonday = (d: Date) => {
+    const date = new Date(d);
+    const day = date.getDay();
+    const diff = (day === 0 ? -6 : 1) - day;
+    date.setDate(date.getDate() + diff);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
+
+  const formatDateKey = (d: Date): string => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
   // Lead time requirement: at least 14 days in advance
   const getMinDate = () => {
     const date = new Date();
     date.setDate(date.getDate() + 14);
-    return date.toISOString().split("T")[0];
+    return formatDateKey(date);
   };
   const minAllowedDate = getMinDate();
 
@@ -226,6 +242,53 @@ export default function Book() {
   // Active trail metadata
   const selectedTrailObj = trails.find((t) => t.id === trailId);
   const trailMeta = getTrailMetadata(selectedTrailObj?.name);
+
+  // Check if selected trail is Kumaliskis Trail (daily trail) vs other mountain trails (weekly trails)
+  const isKumaliskisTrail = useMemo(() => {
+    const name = (selectedTrailObj?.name || "").toLowerCase();
+    return name.includes("kumaliskis") || name.includes("kumalisikis");
+  }, [selectedTrailObj]);
+
+  // Generate available upcoming 16 weeks starting at least 14 days in advance
+  const availableWeeks = useMemo(() => {
+    const minDate = new Date();
+    minDate.setDate(minDate.getDate() + 14);
+    const earliestMonday = getMonday(minDate);
+    if (earliestMonday < minDate) {
+      earliestMonday.setDate(earliestMonday.getDate() + 7);
+    }
+
+    const weeks: { startDate: string; endDate: string; label: string; fullLabel: string }[] = [];
+    for (let i = 0; i < 16; i++) {
+      const monday = new Date(earliestMonday);
+      monday.setDate(earliestMonday.getDate() + i * 7);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+
+      const startStr = formatDateKey(monday);
+      const endStr = formatDateKey(sunday);
+      const label = `${monday.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${sunday.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+      const fullLabel = `Week of ${label}`;
+
+      weeks.push({
+        startDate: startStr,
+        endDate: endStr,
+        label,
+        fullLabel,
+      });
+    }
+    return weeks;
+  }, []);
+
+  // Sync climbDate when switching between Kumaliskis and weekly trails
+  useEffect(() => {
+    if (!isKumaliskisTrail && availableWeeks.length > 0) {
+      const isCurrentInWeeks = availableWeeks.some((w) => w.startDate === climbDate);
+      if (!isCurrentInWeeks) {
+        setClimbDate(availableWeeks[0].startDate);
+      }
+    }
+  }, [isKumaliskisTrail, availableWeeks, climbDate]);
 
   // 2. Fetch slot capacity whenever trail, climbDate, or timeSlot changes
   useEffect(() => {
@@ -328,23 +391,23 @@ export default function Book() {
 
     if (currentStep === 2) {
       if (!climbDate) {
-        alert("Please choose a climb date.");
+        alert(isKumaliskisTrail ? "Please choose a climb date." : "Please choose a trekking week.");
         return false;
       }
-      if (climbDate < minAllowedDate) {
+      if (isKumaliskisTrail && climbDate < minAllowedDate) {
         alert("DENR policy requires booking at least 2 weeks in advance.");
         return false;
       }
       if (slotCapacity && slotCapacity.isFull) {
-        alert("This time slot is fully booked. Please select another date or time slot.");
+        alert("This time slot is fully booked. Please select another date/week or time slot.");
         return false;
       }
       return true;
     }
 
     if (currentStep === 3) {
-      if (!autoAssignGuide && !guideId) {
-        alert("Please choose a tour guide, or check 'Request DENR Auto-Assignment'.");
+      if (!guideId) {
+        alert("Please choose a tour guide.");
         return false;
       }
       return true;
@@ -396,7 +459,9 @@ export default function Book() {
 
       setUploading(false);
 
-      const chosenGuide = guides.find((g) => g.id === guideId);
+      const scheduleLabel = isKumaliskisTrail
+        ? climbDate
+        : availableWeeks.find((w) => w.startDate === climbDate)?.fullLabel || `Week of ${climbDate}`;
 
       const bookingRecord = await createOnlineBooking({
         userId: user!.id,
@@ -405,10 +470,12 @@ export default function Book() {
         trekkingDate: climbDate,
         timeSlot: selectedTimeSlot,
         participantsCount: groupSize,
-        guideId: autoAssignGuide ? null : guideId || null,
+        guideId: guideId || null,
         emergencyContactName: emergencyName,
         emergencyContactPhone: emergencyPhone,
-        medicalNotes: medicalNotes,
+        medicalNotes: isKumaliskisTrail
+          ? medicalNotes
+          : `Schedule: ${scheduleLabel}${medicalNotes ? " | " + medicalNotes : ""}`,
         participants: participants,
         validIdUrl,
         waiverUrl,
@@ -419,10 +486,10 @@ export default function Book() {
       setCreatedVoucher({
         referenceNumber: bookingRecord.reference_number || `NNNP-${new Date().getFullYear()}-REF`,
         trailName: selectedTrailObj?.name || trailMeta.name,
-        climbDate,
+        climbDate: scheduleLabel,
         timeSlot: selectedTimeSlot,
         groupSize,
-        guideName: autoAssignGuide ? "DENR Auto-Assigned Guide" : chosenGuide?.full_name || "Assigned Guide",
+        guideName: guides.find((g) => g.id === guideId)?.full_name || "Assigned Guide",
         emergencyContactName: emergencyName,
         emergencyContactPhone: emergencyPhone,
         participants,
@@ -520,7 +587,7 @@ export default function Book() {
                   1. Select Trekking Trail Destination
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">
-                  Choose your protected trail. Review trailhead elevation, difficulty, and live atmospheric conditions.
+                  Choose your protected trail. Review trailhead elevation and live atmospheric conditions.
                 </p>
               </div>
 
@@ -545,19 +612,7 @@ export default function Book() {
                           alt={trail.name}
                           className="w-full h-full object-cover"
                         />
-                        <div className="absolute top-3 left-3">
-                          <span
-                            className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-xs ${
-                              meta.difficulty === "Challenging"
-                                ? "bg-red-600 text-white"
-                                : meta.difficulty === "Moderate"
-                                ? "bg-amber-600 text-white"
-                                : "bg-emerald-600 text-white"
-                            }`}
-                          >
-                            {meta.difficulty}
-                          </span>
-                        </div>
+
                         <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-xs text-white text-[11px] font-medium px-2 py-0.5 rounded-full">
                           Max {meta.maxCapacityPerSlot} / slot
                         </div>
@@ -646,20 +701,81 @@ export default function Book() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Trekking Date *
-                  </label>
-                  <input
-                    type="date"
-                    min={minAllowedDate}
-                    value={climbDate}
-                    onChange={(e) => setClimbDate(e.target.value)}
-                    className="w-full border border-gray-300 rounded-xl p-3.5 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none shadow-xs text-sm"
-                    required
-                  />
-                  <span className="text-xs text-gray-500 mt-1.5 block">
-                    Earliest available date: <strong>{new Date(minAllowedDate).toLocaleDateString()}</strong> (14-day lead requirement)
-                  </span>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-semibold text-gray-700">
+                      {isKumaliskisTrail ? "Trekking Date *" : "Select Trekking Week *"}
+                    </label>
+                    <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                      isKumaliskisTrail 
+                        ? "bg-amber-50 text-amber-800 border-amber-200" 
+                        : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    }`}>
+                      {isKumaliskisTrail ? "🌿 Daily Schedule" : "🗓️ Weekly Schedule"}
+                    </span>
+                  </div>
+
+                  {isKumaliskisTrail ? (
+                    <div>
+                      <input
+                        type="date"
+                        min={minAllowedDate}
+                        value={climbDate}
+                        onChange={(e) => setClimbDate(e.target.value)}
+                        className="w-full border border-gray-300 rounded-xl p-3.5 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none shadow-xs text-sm"
+                        required
+                      />
+                      <span className="text-xs text-gray-500 mt-1.5 block">
+                        Kumalisikis Trail is open daily. Earliest date: <strong>{new Date(minAllowedDate).toLocaleDateString()}</strong> (14-day lead requirement).
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <select
+                        value={climbDate}
+                        onChange={(e) => setClimbDate(e.target.value)}
+                        className="w-full border border-gray-300 rounded-xl p-3.5 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none shadow-xs text-sm font-semibold text-gray-800 bg-white"
+                        required
+                      >
+                        <option value="">Choose an available trekking week...</option>
+                        {availableWeeks.map((week) => (
+                          <option key={week.startDate} value={week.startDate}>
+                            {week.fullLabel}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Quick week selection cards */}
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">
+                          Next Available Weeks:
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {availableWeeks.slice(0, 4).map((week) => {
+                            const isSelected = climbDate === week.startDate;
+                            return (
+                              <button
+                                key={week.startDate}
+                                type="button"
+                                onClick={() => setClimbDate(week.startDate)}
+                                className={`text-left p-2.5 rounded-xl border text-xs font-bold transition flex items-center justify-between ${
+                                  isSelected
+                                    ? "bg-emerald-50 border-emerald-600 text-emerald-950 ring-2 ring-emerald-600/20 shadow-xs"
+                                    : "bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-700"
+                                }`}
+                              >
+                                <span>{week.label}</span>
+                                {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <span className="text-xs text-gray-500 block">
+                        Major mountain peaks are scheduled by week under DENR conservation rules to manage environmental impact.
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -702,7 +818,7 @@ export default function Book() {
                     <div>
                       <div className="flex items-center justify-between text-sm mb-2">
                         <span className="font-semibold text-gray-800">
-                          {selectedTrailObj?.name} on {climbDate}
+                          {selectedTrailObj?.name} {isKumaliskisTrail ? `on ${climbDate}` : `for ${availableWeeks.find((w) => w.startDate === climbDate)?.fullLabel || `Week of ${climbDate}`}`}
                         </span>
                         <span className={`font-bold px-2.5 py-0.5 rounded-full text-xs ${
                           slotCapacity.isFull ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-800"
@@ -766,125 +882,89 @@ export default function Book() {
                   3. Tour Guide Selection & Assignment
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">
-                  Choose a licensed DENR-accredited local guide, or opt for DENR automatic dispatch.
+                  Choose a licensed DENR-accredited local guide for your trek.
                 </p>
               </div>
 
-              {/* Auto-assign toggle */}
-              <div
-                onClick={() => {
-                  setAutoAssignGuide(!autoAssignGuide);
-                  if (!autoAssignGuide) setGuideId("");
-                }}
-                className={`cursor-pointer border-2 rounded-2xl p-4 transition-all flex items-center justify-between ${
-                  autoAssignGuide
-                    ? "border-emerald-600 bg-emerald-50/60 shadow-sm"
-                    : "border-gray-200 hover:border-gray-300 bg-white"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${
-                    autoAssignGuide ? "bg-emerald-600 border-emerald-600 text-white" : "border-gray-300"
-                  }`}>
-                    {autoAssignGuide && <CheckCircle2 className="w-4 h-4" />}
+              <div>
+                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">
+                  Available Accredited Guides for {isKumaliskisTrail ? climbDate : (availableWeeks.find((w) => w.startDate === climbDate)?.fullLabel || `Week of ${climbDate}`)}
+                </h3>
+
+                {fetchingGuides ? (
+                  <div className="bg-gray-50 rounded-2xl p-8 text-center text-sm text-gray-500 animate-pulse">
+                    Checking guide schedules and conflict prevention...
                   </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-gray-900">
-                      Request DENR Automatic Guide Assignment
-                    </h4>
-                    <p className="text-xs text-gray-500">
-                      The park administration will assign an accredited certified guide suited to your group size and schedule.
+                ) : guides.length === 0 ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center">
+                    <AlertCircle className="w-8 h-8 text-amber-600 mx-auto mb-2" />
+                    <h4 className="font-bold text-amber-900 text-sm">No Independent Guides Available</h4>
+                    <p className="text-xs text-amber-700 mt-1 max-w-md mx-auto">
+                      All independent guides have active treks scheduled for this date. Please select another climb date or slot.
                     </p>
                   </div>
-                </div>
-                <span className="text-xs font-semibold text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-full shrink-0">
-                  Recommended
-                </span>
-              </div>
-
-              {!autoAssignGuide && (
-                <div>
-                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">
-                    Available Accredited Guides for {climbDate}
-                  </h3>
-
-                  {fetchingGuides ? (
-                    <div className="bg-gray-50 rounded-2xl p-8 text-center text-sm text-gray-500 animate-pulse">
-                      Checking guide schedules and conflict prevention...
-                    </div>
-                  ) : guides.length === 0 ? (
-                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center">
-                      <AlertCircle className="w-8 h-8 text-amber-600 mx-auto mb-2" />
-                      <h4 className="font-bold text-amber-900 text-sm">No Independent Guides Available</h4>
-                      <p className="text-xs text-amber-700 mt-1 max-w-md mx-auto">
-                        All independent guides have active treks scheduled for this date. You can enable 
-                        <strong> "Request DENR Automatic Guide Assignment"</strong> above to have an on-duty ranger assigned.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {guides.map((guide) => {
-                        const isSelected = guideId === guide.id;
-                        const isAvail = guide.isAvailable;
-                        return (
-                          <div
-                            key={guide.id}
-                            onClick={() => {
-                              if (isAvail) {
-                                setGuideId(guide.id);
-                                setAutoAssignGuide(false);
-                              }
-                            }}
-                            className={`rounded-2xl p-4 border-2 transition-all flex flex-col justify-between ${
-                              !isAvail
-                                ? "opacity-60 bg-gray-50 border-gray-200 cursor-not-allowed"
-                                : isSelected
-                                ? "border-emerald-600 bg-emerald-50/50 shadow-md cursor-pointer ring-2 ring-emerald-600/20"
-                                : "border-gray-200 hover:border-emerald-300 bg-white cursor-pointer"
-                            }`}
-                          >
-                            <div>
-                              <div className="flex items-center gap-3 mb-2">
-                                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center shrink-0 border border-emerald-200">
-                                  {(guide.full_name || "G").charAt(0).toUpperCase()}
-                                </div>
-                                <div>
-                                  <div className="font-bold text-gray-900 text-sm">{guide.full_name}</div>
-                                  <div className="text-xs text-gray-500">
-                                    {guide.experience_years || 3}+ years trail experience
-                                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {guides.map((guide) => {
+                      const isSelected = guideId === guide.id;
+                      const isAvail = guide.isAvailable;
+                      return (
+                        <div
+                          key={guide.id}
+                          onClick={() => {
+                            if (isAvail) {
+                              setGuideId(guide.id);
+                            }
+                          }}
+                          className={`rounded-2xl p-4 border-2 transition-all flex flex-col justify-between ${
+                            !isAvail
+                              ? "opacity-60 bg-gray-50 border-gray-200 cursor-not-allowed"
+                              : isSelected
+                              ? "border-emerald-600 bg-emerald-50/50 shadow-md cursor-pointer ring-2 ring-emerald-600/20"
+                              : "border-gray-200 hover:border-emerald-300 bg-white cursor-pointer"
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-3 mb-2">
+                              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center shrink-0 border border-emerald-200">
+                                {(guide.full_name || "G").charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="font-bold text-gray-900 text-sm">{guide.full_name}</div>
+                                <div className="text-xs text-gray-500">
+                                  {guide.experience_years || 3}+ years trail experience
                                 </div>
                               </div>
-
-                              <p className="text-xs text-gray-600 line-clamp-2 mt-1">
-                                {guide.bio || "Certified DENR Mountain Guide for Northern Negros protected areas."}
-                              </p>
                             </div>
 
-                            <div className="mt-4 pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
-                              {isAvail ? (
-                                <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                                  <CheckCircle2 className="w-3.5 h-3.5" /> Available on date
-                                </span>
-                              ) : (
-                                <span className="text-red-500 font-semibold flex items-center gap-1">
-                                  <AlertCircle className="w-3.5 h-3.5" /> Booked / On Trek
-                                </span>
-                              )}
-
-                              {isSelected && (
-                                <span className="bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full text-[10px]">
-                                  Selected
-                                </span>
-                              )}
-                            </div>
+                            <p className="text-xs text-gray-600 line-clamp-2 mt-1">
+                              {guide.bio || "Certified DENR Mountain Guide for Northern Negros protected areas."}
+                            </p>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
+
+                          <div className="mt-4 pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
+                            {isAvail ? (
+                              <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Available on date
+                              </span>
+                            ) : (
+                              <span className="text-red-500 font-semibold flex items-center gap-1">
+                                <AlertCircle className="w-3.5 h-3.5" /> Booked / On Trek
+                              </span>
+                            )}
+
+                            {isSelected && (
+                              <span className="bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-full text-[10px]">
+                                Selected
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
               {/* Navigation buttons */}
               <div className="flex justify-between pt-4">
@@ -1204,22 +1284,26 @@ export default function Book() {
                     <span className="text-xs text-emerald-300 font-semibold uppercase">Trail Destination</span>
                     <p className="font-bold text-base text-white">{selectedTrailObj?.name || trailMeta.name}</p>
                     <p className="text-xs text-emerald-200 mt-0.5">
-                      Elevation: {trailMeta.elevation} • Difficulty: {trailMeta.difficulty}
+                      Elevation: {trailMeta.elevation}
                     </p>
                   </div>
 
                   <div>
-                    <span className="text-xs text-emerald-300 font-semibold uppercase">Date & Staggered Slot</span>
-                    <p className="font-bold text-base text-white">{climbDate}</p>
+                    <span className="text-xs text-emerald-300 font-semibold uppercase">
+                      {isKumaliskisTrail ? "Date & Staggered Slot" : "Trekking Week & Staggered Slot"}
+                    </span>
+                    <p className="font-bold text-base text-white">
+                      {isKumaliskisTrail
+                        ? climbDate
+                        : availableWeeks.find((w) => w.startDate === climbDate)?.fullLabel || `Week of ${climbDate}`}
+                    </p>
                     <p className="text-xs text-emerald-200 mt-0.5">{selectedTimeSlot}</p>
                   </div>
 
                   <div>
                     <span className="text-xs text-emerald-300 font-semibold uppercase">Tour Guide Assignment</span>
                     <p className="font-bold text-white">
-                      {autoAssignGuide
-                        ? "DENR Auto-Assigned Guide"
-                        : guides.find((g) => g.id === guideId)?.full_name || "Assigned Guide"}
+                      {guides.find((g) => g.id === guideId)?.full_name || "Assigned Guide"}
                     </p>
                   </div>
 

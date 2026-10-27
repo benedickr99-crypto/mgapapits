@@ -4,6 +4,13 @@ import tsconfigPaths from 'vite-tsconfig-paths'
 
 export default defineConfig({
   plugins: [react(), tsconfigPaths()],
+  server: {
+    host: true,
+    port: 5173,
+    hmr: {
+      port: 5173,
+    },
+  },
   build: {
     rollupOptions: {
       output: {
