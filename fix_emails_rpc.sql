@@ -184,7 +184,25 @@ WHERE email ILIKE '%benedick%'
    OR (raw_user_meta_data->>'full_name') ILIKE '%benedick%';
 
 -- ------------------------------------------------------------------------------
--- 8. Refresh PostgREST schema cache
+-- 8. Allow users to delete their own notifications (RLS DELETE Policy)
+-- ------------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'notifications'
+      AND policyname = 'Users delete own notifications'
+  ) THEN
+    CREATE POLICY "Users delete own notifications"
+      ON public.notifications
+      FOR DELETE
+      USING (auth.uid() = user_id);
+  END IF;
+END;
+$$;
+
+-- ------------------------------------------------------------------------------
+-- 9. Refresh PostgREST schema cache
 -- ------------------------------------------------------------------------------
 NOTIFY pgrst, 'reload schema';
 

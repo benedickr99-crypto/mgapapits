@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, Check, CheckCircle2 } from "lucide-react";
+import { Bell, Check, CheckCircle2, Trash2 } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -10,7 +10,14 @@ import { useNotifications, type Notification } from "@/hooks/useNotifications";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function NotificationBell() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+    clearAllNotifications,
+  } = useNotifications();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -70,14 +77,25 @@ export default function NotificationBell() {
       <PopoverContent align="end" className="w-[calc(100vw-2rem)] sm:w-80 p-0 bg-white rounded-2xl shadow-xl border-gray-100 overflow-hidden z-50 mr-4 sm:mr-0">
         <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50/50">
           <h3 className="font-semibold text-sm text-gray-900">Notifications</h3>
-          {unreadCount > 0 && (
-            <button
-              onClick={() => markAllAsRead()}
-              className="text-[11px] font-medium text-green-600 hover:text-green-700 transition flex items-center gap-1"
-            >
-              <Check size={12} /> Mark all read
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <button
+                onClick={() => markAllAsRead()}
+                className="text-[11px] font-medium text-green-600 hover:text-green-700 transition flex items-center gap-1"
+              >
+                <Check size={12} /> Mark all read
+              </button>
+            )}
+            {notifications.length > 0 && (
+              <button
+                onClick={() => clearAllNotifications()}
+                className="text-[11px] font-medium text-gray-400 hover:text-red-600 transition flex items-center gap-1"
+                title="Clear all notifications"
+              >
+                <Trash2 size={12} /> Clear all
+              </button>
+            )}
+          </div>
         </div>
 
         <ScrollArea className="h-[350px]">
@@ -95,39 +113,52 @@ export default function NotificationBell() {
                 <div
                   key={notification.id}
                   onClick={() => handleNotificationClick(notification)}
-                  className={`px-4 py-3 border-b last:border-0 cursor-pointer transition-colors hover:bg-gray-100 flex gap-3 group ${
+                  className={`px-4 py-3 border-b last:border-0 cursor-pointer transition-colors hover:bg-gray-100 flex gap-3 group items-start ${
                     notification.read ? 'opacity-70' : 'bg-green-50/30'
                   }`}
                 >
-                  <div className="mt-0.5">
+                  <div className="mt-1">
                     {notification.type === 'booking_created' ? (
-                      <div className="h-2 w-2 mt-1.5 rounded-full bg-blue-500" />
+                      <div className="h-2 w-2 rounded-full bg-blue-500" />
                     ) : notification.type === 'booking_approved' || notification.type === 'guide_approval' ? (
-                      <div className="h-2 w-2 mt-1.5 rounded-full bg-green-500" />
+                      <div className="h-2 w-2 rounded-full bg-green-500" />
                     ) : notification.type === 'guide_application' || notification.type === 'guide_application_submitted' ? (
-                      <div className="h-2 w-2 mt-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
                     ) : (
-                      <div className="h-2 w-2 mt-1.5 rounded-full bg-red-500" />
+                      <div className="h-2 w-2 rounded-full bg-red-500" />
                     )}
                   </div>
                   
-                  <div className="flex-1 space-y-1">
+                  <div className="flex-1 space-y-1 min-w-0 pr-1">
                     <p className={`text-sm ${notification.read ? 'text-gray-700 font-medium' : 'text-gray-900 font-semibold'}`}>
                       {notification.title}
                     </p>
-                    <p className="text-xs text-gray-500 leading-snug">
+                    <p className="text-xs text-gray-500 leading-snug break-words">
                       {notification.message}
                     </p>
-                    <p className="text-[10px] text-gray-400 font-medium pt-1">
+                    <p className="text-[10px] text-gray-400 font-medium pt-0.5">
                       {formatTimeAgo(notification.created_at)}
                     </p>
                   </div>
 
-                  {!notification.read && (
-                    <div className="self-center">
-                      <CheckCircle2 size={16} className="text-green-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1 shrink-0 self-center">
+                    {!notification.read && (
+                      <span title="Unread" className="hidden sm:inline-block">
+                        <CheckCircle2 size={14} className="text-green-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteNotification(notification.id);
+                      }}
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 sm:opacity-0 sm:group-hover:opacity-100 transition-all cursor-pointer"
+                      title="Delete notification"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
