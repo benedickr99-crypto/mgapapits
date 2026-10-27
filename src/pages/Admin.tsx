@@ -221,6 +221,8 @@ export default function Admin() {
   const [selectedGuideId, setSelectedGuideId] = useState<string>("");
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [newUserRole, setNewUserRole] = useState<string>("trekker");
+  const [deletingUser, setDeletingUser] = useState<UserProfile | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
   const [editingTrail, setEditingTrail] = useState<TrailRecord | null>(null);
   const [newTrailLimit, setNewTrailLimit] = useState<number>(50);
 
@@ -560,6 +562,42 @@ export default function Admin() {
       setEditingUser(null);
     } catch (err: any) {
       toast.error("Failed to update user role: " + err.message);
+    }
+  };
+
+  // User Account Deletion Handler
+  const handleDeleteUserAccount = async () => {
+    if (!deletingUser) return;
+    if (deletingUser.id === user?.id) {
+      toast.error("You cannot delete your own admin account while logged in.");
+      return;
+    }
+
+    setIsDeletingUser(true);
+    try {
+      // 1. Attempt server-side delete_user_account RPC
+      const { error: rpcError } = await (supabase as any).rpc("delete_user_account", {
+        p_user_id: deletingUser.id,
+      });
+
+      if (rpcError) {
+        console.warn("delete_user_account RPC error, trying direct profile deletion fallback:", rpcError);
+        // Fallback: direct delete from public.profiles
+        const { error: pErr } = await supabase
+          .from("profiles")
+          .delete()
+          .eq("id", deletingUser.id);
+
+        if (pErr) throw pErr;
+      }
+
+      setUsersList((prev) => prev.filter((u) => u.id !== deletingUser.id));
+      toast.success(`Account for ${deletingUser.full_name || "User"} deleted successfully.`);
+      setDeletingUser(null);
+    } catch (err: any) {
+      toast.error("Failed to delete account: " + (err.message || "Unknown error"));
+    } finally {
+      setIsDeletingUser(false);
     }
   };
 
@@ -1264,15 +1302,26 @@ export default function Admin() {
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          <button
-                            onClick={() => {
-                              setEditingUser(u);
-                              setNewUserRole(u.role || "trekker");
-                            }}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 font-bold rounded-xl text-[11px] transition"
-                          >
-                            Edit Role
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => {
+                                setEditingUser(u);
+                                setNewUserRole(u.role || "trekker");
+                              }}
+                              className="px-2.5 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 font-bold rounded-xl text-[11px] transition"
+                            >
+                              Edit Role
+                            </button>
+                            {u.id !== user?.id && (
+                              <button
+                                onClick={() => setDeletingUser(u)}
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition cursor-pointer"
+                                title={`Delete account for ${u.full_name || "User"}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1924,6 +1973,59 @@ export default function Admin() {
         </Dialog>
       )}
 
+      {/* Delete User Account Confirmation Modal */}
+      {deletingUser && (
+        <Dialog open={!!deletingUser} onOpenChange={() => !isDeletingUser && setDeletingUser(null)}>
+          <DialogContent className="max-w-md bg-white rounded-3xl p-6">
+            <DialogHeader>
+              <div className="flex items-center gap-2 text-red-600 mb-1">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <DialogTitle className="text-lg font-bold text-slate-900">
+                  Delete User Account
+                </DialogTitle>
+              </div>
+              <DialogDescription className="text-xs text-slate-500">
+                This action cannot be undone. Please confirm permanent account deletion.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 my-2 text-xs">
+              <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-red-900 space-y-1">
+                <p className="font-bold">
+                  Are you sure you want to permanently delete this account?
+                </p>
+                <p className="text-[11px] text-red-800">
+                  <strong>{deletingUser.full_name || "User"}</strong> ({deletingUser.email || deletingUser.phone || "No contact info"})
+                </p>
+                <p className="text-[10px] text-red-700 pt-1 leading-relaxed">
+                  Role: <span className="font-bold uppercase">{deletingUser.role || "trekker"}</span>. All personal records, profile data, and login access will be permanently removed.
+                </p>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeletingUser}
+                  onClick={() => setDeletingUser(null)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition disabled:opacity-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingUser}
+                  onClick={handleDeleteUserAccount}
+                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                >
+                  {isDeletingUser && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {isDeletingUser ? "Deleting..." : "Delete Account"}
+                </button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* Edit Trail Limit Modal */}
       {editingTrail && (
         <Dialog open={!!editingTrail} onOpenChange={() => setEditingTrail(null)}>
@@ -1979,6 +2081,46 @@ export default function Admin() {
                   Save Settings
                 </button>
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Delete User Account Confirmation Modal */}
+      {deletingUser && (
+        <Dialog open={!!deletingUser} onOpenChange={(open) => { if (!open) setDeletingUser(null); }}>
+          <DialogContent className="max-w-md bg-white rounded-3xl p-6">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-red-700 flex items-center gap-2">
+                <Trash2 className="w-5 h-5" /> Delete User Account
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500">
+                This action is permanent and cannot be undone. All data associated with this account will be removed.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="my-4 p-4 bg-red-50 border border-red-200 rounded-2xl text-sm">
+              <p className="text-slate-700 font-semibold mb-1">You are about to permanently delete:</p>
+              <p className="text-slate-900 font-black text-base">{deletingUser.full_name || "User"}</p>
+              <p className="text-slate-500 text-xs mt-0.5">{deletingUser.email || "No email on record"} &bull; Role: <span className="font-bold uppercase">{deletingUser.role}</span></p>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setDeletingUser(null)}
+                disabled={isDeletingUser}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteUserAccount}
+                disabled={isDeletingUser}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-xs transition disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isDeletingUser ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {isDeletingUser ? "Deleting..." : "Delete Account"}
+              </button>
             </div>
           </DialogContent>
         </Dialog>

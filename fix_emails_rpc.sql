@@ -346,3 +346,37 @@ WHERE email ILIKE '%benedick%'
 SELECT id, full_name, email, role
 FROM public.get_profiles_with_email()
 LIMIT 5;
+
+-- ------------------------------------------------------------------------------
+-- 14. Admin: delete_user_account RPC (allows admin to delete any user)
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.delete_user_account(p_user_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  -- Verify caller is an admin
+  IF (SELECT role FROM public.profiles WHERE id = auth.uid()) <> 'admin' THEN
+    RAISE EXCEPTION 'Only administrators can delete user accounts.';
+  END IF;
+
+  -- Prevent admins from deleting themselves
+  IF p_user_id = auth.uid() THEN
+    RAISE EXCEPTION 'Cannot delete your own admin account while logged in.';
+  END IF;
+
+  -- Delete profile (cascades to bookings, notifications, etc. if FK is ON DELETE CASCADE)
+  DELETE FROM public.profiles WHERE id = p_user_id;
+
+  -- Remove from Supabase Auth (requires service role context via security definer)
+  DELETE FROM auth.users WHERE id = p_user_id;
+END;
+$$;
+
+-- Grant execute permission to authenticated users (RLS inside function ensures only admins can call it)
+GRANT EXECUTE ON FUNCTION public.delete_user_account(UUID) TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
+
