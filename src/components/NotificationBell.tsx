@@ -42,8 +42,11 @@ export default function NotificationBell() {
         notification.type === 'guide_application_submitted'
       ) {
         navigate('/admin?tab=guides');
-      } else if (notification.type === 'guide_approval') {
-        navigate('/guide-dashboard');
+      } else if (
+        notification.type === 'guide_approval' ||
+        notification.type === 'booking_assignment'
+      ) {
+        navigate('/guide');
       } else {
         navigate('/my-bookings');
       }
@@ -118,10 +121,10 @@ export default function NotificationBell() {
                   }`}
                 >
                   <div className="mt-1">
-                    {notification.type === 'booking_created' ? (
+                    {notification.type === 'booking_created' || notification.type === 'booking_assignment' ? (
                       <div className="h-2 w-2 rounded-full bg-blue-500" />
-                    ) : notification.type === 'booking_approved' || notification.type === 'guide_approval' ? (
-                      <div className="h-2 w-2 rounded-full bg-green-500" />
+                    ) : notification.type === 'booking_approved' || notification.type === 'guide_approval' || notification.type === 'guide_acceptance' || notification.type === 'role_updated' ? (
+                      <div className="h-2 w-2 rounded-full bg-emerald-500" />
                     ) : notification.type === 'guide_application' || notification.type === 'guide_application_submitted' ? (
                       <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
                     ) : (

@@ -302,30 +302,75 @@ export default function GuideDashboard() {
       : { declined_at: new Date().toISOString(), accepted_at: null };
 
     try {
-      const { error } = await supabase
+      const { data: updatedBooking, error } = await supabase
         .from("bookings")
         .update(updateData)
-        .eq("id", id);
+        .eq("id", id)
+        .select("id, user_id, climb_date, trails(name)")
+        .single();
 
       if (error) throw error;
+
+      // Dispatch real-time notification to trekker
+      if (updatedBooking && updatedBooking.user_id) {
+        const guideName = profile?.full_name || "Your tour guide";
+        const trailName = (updatedBooking as any).trails?.name || "Trail";
+        try {
+          await supabase.from("notifications").insert({
+            user_id: updatedBooking.user_id,
+            title: decision === "accept" ? "✅ Tour Guide Confirmed" : "⚠️ Tour Guide Declined",
+            message: decision === "accept"
+              ? `${guideName} has accepted and confirmed your trek for ${trailName} on ${updatedBooking.climb_date}.`
+              : `${guideName} is unavailable for ${trailName} on ${updatedBooking.climb_date}. An administrator will assign another guide.`,
+            type: decision === "accept" ? "guide_acceptance" : "guide_rejection",
+            read: false,
+            link: "/my-bookings",
+            entity_id: id,
+          });
+        } catch (notifErr) {
+          console.warn("Could not dispatch trekker notification:", notifErr);
+        }
+      }
+
+      toast.success(decision === 'accept' ? "Trek assignment accepted! Trekker notified." : "Trek assignment declined.");
       fetchBookings();
-    } catch (err) {
-      alert("Error updating booking status");
+    } catch (err: any) {
+      toast.error("Error updating booking status: " + (err.message || "Failed"));
     }
   };
 
   const handleStatusChange = async (id: string, newStatus: string) => {
     try {
-      const { error } = await supabase
+      const { data: updatedBooking, error } = await supabase
         .from("bookings")
         .update({ status: newStatus } as any)
-        .eq("id", id);
+        .eq("id", id)
+        .select("id, user_id, climb_date, trails(name)")
+        .single();
 
       if (error) throw error;
-      alert(`Trek status marked as: ${newStatus}`);
+      toast.success(`Trek status updated to: ${newStatus.toUpperCase()}`);
+
+      // When trek is completed, prompt trekker to submit a review
+      if (updatedBooking && updatedBooking.user_id && newStatus === "completed") {
+        try {
+          await supabase.from("notifications").insert({
+            user_id: updatedBooking.user_id,
+            title: "🌟 Trek Completed — Leave a Review!",
+            message: `Congratulations on completing your trek on ${updatedBooking.climb_date}! Please share your feedback and rate your tour guide.`,
+            type: "booking_approved",
+            read: false,
+            link: "/my-bookings",
+            entity_id: id,
+          });
+        } catch (notifErr) {
+          console.warn("Could not send completion notification:", notifErr);
+        }
+      }
+
       fetchBookings();
     } catch (err: any) {
-      alert("Failed to update status: " + err.message);
+      toast.error("Failed to update status: " + err.message);
     }
   };
 

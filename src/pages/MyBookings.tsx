@@ -195,13 +195,27 @@ export default function MyBookings() {
     if (showRefreshing) setIsRefreshing(true);
 
     try {
-      const { data: bookingsData, error } = await supabase
+      let bookingsData: any = null;
+      const res = await supabase
         .from("bookings")
         .select("*, trails(name), guides:profiles!bookings_guide_id_fkey(name:full_name)")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      if (!error && bookingsData) {
+      if (res.error) {
+        console.warn("MyBookings with guide join failed, falling back:", res.error);
+        const fallbackRes = await supabase
+          .from("bookings")
+          .select("*, trails(name)")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        bookingsData = fallbackRes.data;
+      } else {
+        bookingsData = res.data;
+      }
+
+      if (bookingsData) {
         setData(bookingsData as unknown as BookingWithTrail[]);
         try {
           localStorage.setItem(`nnnp_bookings_${user.id}`, JSON.stringify(bookingsData));

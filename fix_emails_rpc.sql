@@ -1,21 +1,54 @@
 -- ==============================================================================
--- TAKAZZ NNNP - COMPLETE DATABASE FIX SCRIPT
+-- TAKAZZ NNNP - MASTER DATABASE SETUP & REPAIR SCRIPT
 -- Run this in your Supabase Dashboard > SQL Editor:
 -- https://supabase.com/dashboard/project/kmmgtcyegvbrgsdbdtsh/sql/new
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
--- 1. Ensure email column exists on public.profiles
+-- 1. Ensure email, bio, experience_years, certifications on public.profiles
 -- ------------------------------------------------------------------------------
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND table_name = 'profiles'
-      AND column_name = 'email'
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'email'
   ) THEN
     ALTER TABLE public.profiles ADD COLUMN email TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'bio'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN bio TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'experience_years'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN experience_years INT DEFAULT 0;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'certifications'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN certifications TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'guide_application_status'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN guide_application_status TEXT DEFAULT 'none';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'is_available'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN is_available BOOLEAN DEFAULT true;
   END IF;
 END;
 $$;
@@ -30,7 +63,7 @@ WHERE p.id = u.id
   AND (p.email IS NULL OR p.email = '');
 
 -- ------------------------------------------------------------------------------
--- 3. Create or replace get_profiles_with_email() RPC
+-- 3. Create or replace get_profiles_with_email() RPC for Admin Users Table
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.get_profiles_with_email()
 RETURNS TABLE (
@@ -184,14 +217,15 @@ WHERE email ILIKE '%benedick%'
    OR (raw_user_meta_data->>'full_name') ILIKE '%benedick%';
 
 -- ------------------------------------------------------------------------------
--- 8. Allow users to delete their own notifications (RLS DELETE Policy)
+-- 8. Fix Notifications: Drop restrictive type check constraint & add Delete Policy
 -- ------------------------------------------------------------------------------
+ALTER TABLE public.notifications DROP CONSTRAINT IF EXISTS notifications_type_check;
+
 DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_policies
-    WHERE tablename = 'notifications'
-      AND policyname = 'Users delete own notifications'
+    WHERE tablename = 'notifications' AND policyname = 'Users delete own notifications'
   ) THEN
     CREATE POLICY "Users delete own notifications"
       ON public.notifications
@@ -202,12 +236,107 @@ END;
 $$;
 
 -- ------------------------------------------------------------------------------
--- 9. Refresh PostgREST schema cache
+-- 9. Fix Bookings Permissions & Delete RPC for Trekkers and Admins
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.delete_booking(p_booking_id UUID)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  DELETE FROM public.bookings
+  WHERE id = p_booking_id AND (user_id = auth.uid() OR public.has_role(auth.uid(), 'admin'));
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Booking not found or not owned by user';
+  END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.delete_booking(UUID) TO authenticated;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "Users delete own bookings" ON public.bookings;
+  DROP POLICY IF EXISTS "Admins delete bookings" ON public.bookings;
+  DROP POLICY IF EXISTS "Users update own bookings" ON public.bookings;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+CREATE POLICY "Users delete own bookings" ON public.bookings FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Admins delete bookings" ON public.bookings FOR DELETE USING (public.has_role(auth.uid(), 'admin'));
+CREATE POLICY "Users update own bookings" ON public.bookings FOR UPDATE USING (auth.uid() = user_id);
+
+-- ------------------------------------------------------------------------------
+-- 10. Ensure incident_reports Table & Policies for Tour Guides & Admins
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.incident_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  guide_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  trail_id UUID,
+  trail_name TEXT,
+  booking_id UUID,
+  category TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  location_details TEXT,
+  description TEXT NOT NULL,
+  action_taken TEXT,
+  requires_assistance BOOLEAN DEFAULT false,
+  status TEXT DEFAULT 'open',
+  admin_notes TEXT,
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.incident_reports ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "Anyone view incidents" ON public.incident_reports;
+  DROP POLICY IF EXISTS "Guides create incidents" ON public.incident_reports;
+  DROP POLICY IF EXISTS "Admins update incidents" ON public.incident_reports;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+CREATE POLICY "Anyone view incidents" ON public.incident_reports FOR SELECT USING (true);
+CREATE POLICY "Guides create incidents" ON public.incident_reports FOR INSERT WITH CHECK (auth.uid() = guide_id);
+CREATE POLICY "Admins update incidents" ON public.incident_reports FOR ALL USING (public.has_role(auth.uid(), 'admin'));
+
+-- ------------------------------------------------------------------------------
+-- 11. Ensure ratings_reviews Table & Policies for Trekkers
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.ratings_reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id UUID REFERENCES public.bookings(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  guide_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  trail_id UUID,
+  trail_rating INT DEFAULT 5,
+  guide_rating INT DEFAULT 5,
+  overall_rating INT DEFAULT 5,
+  feedback_text TEXT,
+  is_approved BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.ratings_reviews ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "Anyone view reviews" ON public.ratings_reviews;
+  DROP POLICY IF EXISTS "Users create reviews" ON public.ratings_reviews;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+CREATE POLICY "Anyone view reviews" ON public.ratings_reviews FOR SELECT USING (true);
+CREATE POLICY "Users create reviews" ON public.ratings_reviews FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- ------------------------------------------------------------------------------
+-- 12. Refresh PostgREST schema cache
 -- ------------------------------------------------------------------------------
 NOTIFY pgrst, 'reload schema';
 
 -- ------------------------------------------------------------------------------
--- 9. Verification queries: Confirm roles and profiles
+-- 13. Verification queries: Confirm roles and profiles
 -- ------------------------------------------------------------------------------
 SELECT id, full_name, email, role, guide_application_status
 FROM public.profiles

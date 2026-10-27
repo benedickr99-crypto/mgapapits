@@ -290,7 +290,34 @@ export default function Admin() {
           .order("created_at", { ascending: false });
 
         if (bErr) {
-          console.warn("Bookings query error:", bErr);
+          console.warn("Bookings query with guide join failed, falling back:", bErr);
+          const { data: fbData, error: fbErr } = await supabase
+            .from("bookings")
+            .select(`
+              id,
+              user_id,
+              climb_date,
+              status,
+              group_size,
+              foreign_count,
+              notes,
+              permit_number,
+              emergency_contact_name,
+              emergency_contact_phone,
+              trail_id,
+              guide_id,
+              valid_id_url,
+              waiver_url,
+              medical_cert_url,
+              created_at,
+              profiles (full_name, phone),
+              trails (id, name, weekly_slots)
+            `)
+            .order("created_at", { ascending: false });
+
+          if (!fbErr && fbData) {
+            setBookings((fbData as unknown as Booking[]) || []);
+          }
         } else if (bookingsData) {
           setBookings((bookingsData as unknown as Booking[]) || []);
         }
@@ -472,7 +499,22 @@ export default function Admin() {
 
       if (error) throw error;
 
-      toast.success("Tour guide assigned successfully!");
+      // Send instant notification to the assigned guide
+      try {
+        await supabase.from("notifications").insert({
+          user_id: selectedGuideId,
+          title: "🧭 New Trekking Assignment",
+          message: `Admin has assigned you to lead a trek on ${assigningBooking.climb_date} for ${assigningBooking.trails?.name || "NNNP Trail"} (${assigningBooking.group_size || 1} trekkers). Please review on your Guide Dashboard.`,
+          type: "booking_assignment",
+          read: false,
+          link: "/guide",
+          entity_id: assigningBooking.id,
+        });
+      } catch (notifErr) {
+        console.warn("Could not notify assigned guide:", notifErr);
+      }
+
+      toast.success("Tour guide assigned & notified successfully!");
       setAssigningBooking(null);
       setSelectedGuideId("");
       fetchData();
