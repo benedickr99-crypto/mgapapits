@@ -71,11 +71,20 @@ export default function SiteHeader() {
   // Close on ESC
   useEffect(() => {
     const esc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        setMobile(false);
+      }
     };
     document.addEventListener("keydown", esc);
     return () => document.removeEventListener("keydown", esc);
   }, []);
+
+  // Auto-close menus on route change
+  useEffect(() => {
+    setMobile(false);
+    setOpen(false);
+  }, [location.pathname]);
 
   const logout = async () => {
     await signOut();
@@ -85,35 +94,37 @@ export default function SiteHeader() {
   return (
     <div className="sticky top-0 z-50">
       <AnnouncementsBanner />
-      <header className="backdrop-blur-xl bg-white/80 border-b border-white/20 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <header className="backdrop-blur-xl bg-white/90 border-b border-gray-100 shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
 
         {/* LEFT SIDE: Hamburger + Logo */}
-        <div className="flex items-center gap-1 md:gap-0">
+        <div className="flex items-center gap-2 shrink-0">
           {/* MOBILE BUTTON */}
           <button
-            className="md:hidden p-2 -ml-2 mr-1 rounded-lg hover:bg-gray-100 text-gray-700"
+            className="md:hidden p-2 rounded-xl hover:bg-gray-100 text-gray-700 transition-colors flex items-center justify-center focus:outline-none"
             onClick={() => setMobile(!mobile)}
+            aria-label="Toggle navigation menu"
           >
-            {mobile ? <X size={24} /> : <Menu size={24} />}
+            {mobile ? <X size={22} className="stroke-[2.2]" /> : <Menu size={22} className="stroke-[2.2]" />}
           </button>
 
           {/* LOGO */}
           <Link
             to="/"
-            className="flex items-center gap-2.5 text-xl font-bold tracking-tight text-green-700 hover:opacity-90 transition-opacity"
+            onClick={() => setMobile(false)}
+            className="flex items-center gap-2 text-lg sm:text-xl font-bold tracking-tight text-green-700 hover:opacity-90 transition-opacity"
           >
             <img
               src="/takazz-logo.png"
               alt="TAKAZZ Logo"
-              className="w-10 h-10 object-contain"
+              className="w-9 h-9 object-contain"
             />
-            <span>TAKAZZ</span>
+            <span className="font-extrabold tracking-tight">TAKAZZ</span>
           </Link>
         </div>
 
         {/* DESKTOP NAV */}
-        <nav className="hidden md:flex items-center gap-2 bg-white/60 backdrop-blur-md px-4 py-2 rounded-2xl shadow-sm border border-white/20">
+        <nav className="hidden md:flex items-center gap-1.5 bg-gray-50/80 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-gray-200/60 shadow-xs">
           {navLinks.map((link) => {
             const active = location.pathname === link.path;
             return (
@@ -121,8 +132,8 @@ export default function SiteHeader() {
                 key={link.path}
                 to={link.path}
                 className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${active
-                    ? "bg-green-600 text-white shadow"
-                    : "text-gray-600 hover:bg-gray-100"
+                    ? "bg-green-600 text-white shadow-xs"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100/80"
                   }`}
               >
                 {link.name}
@@ -132,19 +143,19 @@ export default function SiteHeader() {
         </nav>
 
         {/* RIGHT SIDE */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
 
           {/* USER ACTIONS */}
           {user ? (
-            <div className="flex items-center gap-1 md:gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-3">
               <NotificationBell />
 
-              <div className="relative ml-1" ref={dropdownRef}>
+              <div className="relative ml-0.5 sm:ml-1" ref={dropdownRef}>
                 <button
                   onClick={() => setOpen(!open)}
-                  className="flex items-center gap-2 bg-white/70 backdrop-blur px-3 py-2 rounded-full shadow-sm border border-white/20 hover:shadow-md transition"
+                  className="flex items-center gap-2 bg-white/90 backdrop-blur px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-full shadow-xs border border-gray-200/70 hover:shadow-md transition cursor-pointer"
                 >
-                  <div className="h-8 w-8 rounded-full bg-green-600 text-white flex items-center justify-center text-sm font-bold">
+                  <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-green-600 text-white flex items-center justify-center text-xs sm:text-sm font-bold shadow-xs">
                     {initials}
                   </div>
 
@@ -162,17 +173,17 @@ export default function SiteHeader() {
                     )}
                   </div>
 
-                  <ChevronDown size={16} />
+                  <ChevronDown size={15} className="text-gray-500" />
                 </button>
 
                 {/* DROPDOWN */}
                 <div
-                  className={`absolute right-0 mt-3 w-56 transition-all duration-200 ${open
+                  className={`absolute right-0 mt-3 w-56 transition-all duration-200 z-50 ${open
                       ? "opacity-100 scale-100 translate-y-0"
                       : "opacity-0 scale-95 translate-y-2 pointer-events-none"
                     }`}
                 >
-                  <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-2">
+                  <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-2">
                     <div className="px-3 py-2 border-b border-gray-100 mb-1">
                       <p className="text-xs font-bold text-gray-900 truncate">{displayName}</p>
                       <p className="text-[10px] text-gray-400 truncate">{user?.email}</p>
@@ -235,7 +246,7 @@ export default function SiteHeader() {
           ) : (
             <Link
               to="/login"
-              className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-green-700 shadow-sm"
+              className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-700 shadow-xs transition"
             >
               Login
             </Link>
@@ -245,37 +256,79 @@ export default function SiteHeader() {
 
       {/* MOBILE MENU */}
       <div
-        className={`md:hidden transition-all duration-300 overflow-hidden ${mobile ? "max-h-60 opacity-100" : "max-h-0 opacity-0"
-          }`}
+        className={`md:hidden transition-all duration-300 ease-in-out overflow-hidden ${
+          mobile ? "max-h-[85vh] opacity-100 border-b border-gray-200 shadow-xl" : "max-h-0 opacity-0 pointer-events-none"
+        }`}
       >
-        <div className="px-4 pb-4 space-y-2 bg-white/80 backdrop-blur border-t">
-          {navLinks.map((link) => (
-            <Link
-              key={link.path}
-              to={link.path}
-              onClick={() => setMobile(false)}
-              className="block px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 text-sm"
-            >
-              {link.name}
-            </Link>
-          ))}
+        <div className="px-4 py-3 space-y-1 bg-white/95 backdrop-blur-xl max-h-[calc(85vh-4rem)] overflow-y-auto">
+          {navLinks.map((link) => {
+            const active = location.pathname === link.path;
+            return (
+              <Link
+                key={link.path}
+                to={link.path}
+                onClick={() => setMobile(false)}
+                className={`flex items-center px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                  active
+                    ? "bg-green-600 text-white shadow-xs"
+                    : "text-gray-700 hover:bg-gray-100"
+                }`}
+              >
+                {link.name}
+              </Link>
+            );
+          })}
+
           {user && isAdmin && (
             <Link
               to="/admin"
               onClick={() => setMobile(false)}
-              className="block px-3 py-2 rounded-lg text-red-600 font-medium hover:bg-red-50 text-sm"
+              className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-red-600 font-bold hover:bg-red-50 text-sm transition-colors"
             >
-              Admin Panel
+              <Shield size={16} /> Admin Panel
             </Link>
           )}
+
           {user && isGuide && (
             <Link
               to="/guide"
               onClick={() => setMobile(false)}
-              className="block px-3 py-2 rounded-lg text-amber-600 font-medium hover:bg-amber-50 text-sm"
+              className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-amber-600 font-bold hover:bg-amber-50 text-sm transition-colors"
             >
-              Guide Dashboard
+              <Shield size={16} /> Guide Dashboard
             </Link>
+          )}
+
+          {user && (
+            <div className="pt-2 mt-2 border-t border-gray-100 space-y-1">
+              <div className="px-3.5 py-1 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                My Account
+              </div>
+              <Link
+                to="/my-bookings"
+                onClick={() => setMobile(false)}
+                className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-gray-700 hover:bg-gray-100 text-sm font-medium"
+              >
+                <Calendar size={16} className="text-gray-500" /> My Bookings
+              </Link>
+              <Link
+                to="/profile"
+                onClick={() => setMobile(false)}
+                className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-gray-700 hover:bg-gray-100 text-sm font-medium"
+              >
+                <User size={16} className="text-gray-500" /> Profile
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobile(false);
+                  logout();
+                }}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-red-600 hover:bg-red-50 text-sm font-medium transition-colors"
+              >
+                <LogOut size={16} /> Logout
+              </button>
+            </div>
           )}
         </div>
       </div>
