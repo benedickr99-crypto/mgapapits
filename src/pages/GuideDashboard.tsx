@@ -7,7 +7,8 @@ import {
   Award, Briefcase, Bell, CheckCircle, XCircle,
   AlertTriangle, Phone, Activity, ExternalLink, Eye,
   Star, ThumbsUp, Filter, Menu, ChevronRight, ChevronDown, Compass,
-  ChevronLeft, CalendarDays, Coffee, Sparkles, CheckCheck, RotateCcw
+  ChevronLeft, CalendarDays, Coffee, Sparkles, CheckCheck, RotateCcw,
+  Trash2
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -29,6 +30,7 @@ import {
 
 type Booking = {
   id: string;
+  user_id: string | null;
   climb_date: string;
   status: string;
   group_size: number;
@@ -57,6 +59,10 @@ export default function GuideDashboard() {
 
   // Participant Roster Modal
   const [selectedBookingRoster, setSelectedBookingRoster] = useState<Booking | null>(null);
+
+  // Delete Confirmed Trek state
+  const [deletingBooking, setDeletingBooking] = useState<Booking | null>(null);
+  const [isDeletingBooking, setIsDeletingBooking] = useState(false);
 
   // Incidents state
   const [incidents, setIncidents] = useState<IncidentReport[]>([]);
@@ -119,6 +125,7 @@ export default function GuideDashboard() {
         .from("bookings")
         .select(`
           id,
+          user_id,
           climb_date,
           status,
           group_size,
@@ -372,6 +379,70 @@ export default function GuideDashboard() {
       fetchBookings();
     } catch (err: any) {
       toast.error("Failed to update status: " + err.message);
+    }
+  };
+
+  const handleDeleteConfirmedTrek = async () => {
+    if (!deletingBooking) return;
+    try {
+      setIsDeletingBooking(true);
+      const bookingId = deletingBooking.id;
+
+      // 1. Delete associated participants if possible
+      try {
+        await (supabase.from as any)("booking_participants").delete().eq("booking_id", bookingId);
+      } catch {}
+
+      // 2. Try deleting the booking from database
+      const { error } = await supabase
+        .from("bookings")
+        .delete()
+        .eq("id", bookingId);
+
+      if (error) {
+        // If hard delete is restricted by foreign key or RLS, unassign guide and cancel
+        const { error: cancelErr } = await supabase
+          .from("bookings")
+          .update({
+            guide_id: null,
+            status: "cancelled",
+            cancellation_reason: "Cancelled / Removed by assigned tour guide",
+            cancelled_at: new Date().toISOString(),
+          } as any)
+          .eq("id", bookingId);
+
+        if (cancelErr) throw cancelErr;
+        toast.info("Trek removed from confirmed schedule and marked cancelled.");
+      } else {
+        toast.success("Confirmed trek deleted successfully.");
+      }
+
+      // 3. Dispatch notification to the trekker
+      if (deletingBooking.user_id) {
+        try {
+          const guideName = profile?.full_name || "Your tour guide";
+          const trailName = (deletingBooking as any).trails?.name || "Trail";
+          await supabase.from("notifications").insert({
+            user_id: deletingBooking.user_id,
+            title: "Confirmed Trek Cancelled by Tour Guide",
+            message: `${guideName} has cancelled the confirmed trek for ${trailName} on ${deletingBooking.climb_date}. An administrator can assign another guide.`,
+            type: "guide_rejection",
+            read: false,
+            link: "/my-bookings",
+            entity_id: bookingId,
+          });
+        } catch (notifErr) {
+          console.warn("Could not dispatch trekker notification:", notifErr);
+        }
+      }
+
+      // Update state immediately
+      setBookings((prev) => prev.filter((b) => b.id !== bookingId));
+      setDeletingBooking(null);
+    } catch (err: any) {
+      toast.error("Failed to delete trek: " + (err.message || "Failed"));
+    } finally {
+      setIsDeletingBooking(false);
     }
   };
 
@@ -1289,6 +1360,15 @@ export default function GuideDashboard() {
                           Completed
                         </span>
                       )}
+
+                      {/* Delete Confirmed Trek Action */}
+                      <button
+                        onClick={() => setDeletingBooking(booking)}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold bg-red-50 hover:bg-red-100 text-red-600 px-3.5 py-2.5 rounded-xl transition border border-red-100"
+                        title="Delete confirmed trek"
+                      >
+                        <Trash2 size={14} /> Delete Trek
+                      </button>
                     </div>
                   </div>
                 );
@@ -2271,6 +2351,54 @@ export default function GuideDashboard() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmed Trek Confirmation Modal */}
+      {deletingBooking && (
+        <Dialog open={!!deletingBooking} onOpenChange={() => !isDeletingBooking && setDeletingBooking(null)}>
+          <DialogContent className="max-w-md bg-white rounded-3xl p-6">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-red-600 flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-red-600" />
+                Delete Confirmed Trek
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4 my-2 text-xs">
+              <div className="bg-red-50 text-red-800 p-4 rounded-2xl border border-red-200">
+                <p className="font-semibold text-sm">
+                  Delete confirmed trek on {deletingBooking.climb_date}?
+                </p>
+                <p className="text-[11px] text-red-700 mt-1.5 leading-relaxed">
+                  This will remove this booking from your confirmed schedule. The trekker will be notified that this trek assignment has been cancelled.
+                </p>
+                <div className="mt-2.5 pt-2 border-t border-red-200/80 text-[11px] text-red-900 font-medium">
+                  Trail: <strong>{(deletingBooking as any).trails?.name || "Trail"}</strong> • Group Size: <strong>{deletingBooking.group_size} Trekkers</strong>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeletingBooking}
+                  onClick={() => setDeletingBooking(null)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition"
+                >
+                  Keep Trek
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingBooking}
+                  onClick={handleDeleteConfirmedTrek}
+                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-1.5"
+                >
+                  {isDeletingBooking && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {isDeletingBooking ? "Deleting..." : "Yes, Delete Trek"}
+                </button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

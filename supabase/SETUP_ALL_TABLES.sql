@@ -272,6 +272,8 @@ CREATE POLICY "Users create own bookings" ON public.bookings FOR INSERT WITH CHE
 CREATE POLICY "Users update own pending bookings" ON public.bookings FOR UPDATE USING (auth.uid() = user_id AND status = 'pending');
 CREATE POLICY "Users delete own bookings" ON public.bookings FOR DELETE USING (auth.uid() = user_id);
 CREATE POLICY "Guides view assigned bookings" ON public.bookings FOR SELECT USING (guide_id = auth.uid());
+DROP POLICY IF EXISTS "Guides delete assigned bookings" ON public.bookings;
+CREATE POLICY "Guides delete assigned bookings" ON public.bookings FOR DELETE USING (guide_id = auth.uid());
 CREATE POLICY "Admins view all bookings" ON public.bookings FOR SELECT USING (public.has_role(auth.uid(), 'admin'));
 CREATE POLICY "Admins update bookings" ON public.bookings FOR UPDATE USING (public.has_role(auth.uid(), 'admin'));
 CREATE POLICY "Admins delete bookings" ON public.bookings FOR DELETE USING (public.has_role(auth.uid(), 'admin'));
