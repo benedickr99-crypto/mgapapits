@@ -11,24 +11,31 @@ export default function Home() {
   return (
     <div ref={scrollRef} className="bg-gray-50 text-gray-800">
       {/* HERO SECTION */}
-      <section
-        className="relative w-full min-h-[80vh] flex items-center justify-center text-center bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage: `url(${heroImg})`,
-        }}
-      >
+      <section className="relative w-full min-h-[85vh] flex items-center justify-center text-center overflow-hidden">
+        {/* Background Video */}
+        <video
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          autoPlay
+          loop
+          muted
+          playsInline
+        >
+          <source src="/hero-bg.mp4" type="video/mp4" />
+          <source src="/1109%20(1)(4).mp4" type="video/mp4" />
+        </video>
+
         {/* Overlay */}
-        <div className="absolute inset-0 bg-black/60"></div>
+        <div className="absolute inset-0 bg-black/55 backdrop-brightness-95"></div>
 
         {/* Content */}
-        <div className="relative z-10 text-white px-6">
-          <h1 className="text-5xl md:text-6xl font-bold mb-6">
+        <div className="relative z-10 text-white px-6 max-w-4xl mx-auto">
+          <h1 className="text-5xl md:text-6xl font-bold mb-6 tracking-tight">
             Explore Nature.
             <br />
             Book Your Adventure.
           </h1>
 
-          <p className="text-lg md:text-xl mb-8 max-w-2xl mx-auto">
+          <p className="text-lg md:text-xl mb-8 max-w-2xl mx-auto text-white/90 leading-relaxed">
             Seamless trekking permit booking system for hikers and adventurers
             in Northern Negros Natural Park.
           </p>
@@ -36,14 +43,14 @@ export default function Home() {
           <div className="flex gap-4 justify-center flex-wrap">
             <Link
               to="/booking"
-              className="bg-green-600 hover:bg-green-700 px-6 py-3 rounded-xl font-semibold transition"
+              className="bg-emerald-600 hover:bg-emerald-700 px-6 py-3 rounded-xl font-semibold transition shadow-lg"
             >
               Start Booking
             </Link>
 
             <Link
               to="/trails"
-              className="bg-white text-black hover:bg-gray-200 px-6 py-3 rounded-xl font-semibold transition"
+              className="bg-white text-slate-900 hover:bg-slate-100 px-6 py-3 rounded-xl font-semibold transition shadow-lg"
             >
               View Trails
             </Link>
