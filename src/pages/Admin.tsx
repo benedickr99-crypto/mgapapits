@@ -701,25 +701,77 @@ export default function Admin() {
       setIsDeletingTrail(true);
       const trailId = deletingTrail.id;
 
-      // 1. Delete associated child schedules & reviews if any
+      // 1. Clean up all child dependencies first to eliminate 409 Foreign Key Conflicts:
+      // a. Find and remove all bookings linked to this trail
+      try {
+        const { data: linkedBookings } = await supabase
+          .from("bookings")
+          .select("id")
+          .eq("trail_id", trailId);
+
+        if (linkedBookings && linkedBookings.length > 0) {
+          const bIds = linkedBookings.map((b: any) => b.id);
+
+          // Delete booking participants
+          try {
+            await (supabase.from as any)("booking_participants")
+              .delete()
+              .in("booking_id", bIds);
+          } catch (e) {
+            console.warn("Participant delete error:", e);
+          }
+
+          // Delete reviews linked to these bookings
+          try {
+            await (supabase.from as any)("ratings_reviews")
+              .delete()
+              .in("booking_id", bIds);
+          } catch (e) {
+            console.warn("Review delete error:", e);
+          }
+
+          // Delete bookings
+          const { error: bkErr } = await supabase
+            .from("bookings")
+            .delete()
+            .in("id", bIds);
+          if (bkErr) {
+            console.warn("Booking delete error:", bkErr);
+          }
+        }
+      } catch (bErr) {
+        console.warn("Linked bookings cleanup warning:", bErr);
+      }
+
+      // b. Delete schedules, reviews, announcements, and incident reports referencing this trail
       try {
         await (supabase.from as any)("trekking_schedules").delete().eq("trail_id", trailId);
       } catch {}
       try {
         await (supabase.from as any)("ratings_reviews").delete().eq("trail_id", trailId);
       } catch {}
+      try {
+        await (supabase.from as any)("announcements").delete().eq("trail_id", trailId);
+      } catch {}
+      try {
+        await (supabase.from as any)("incident_reports").update({ trail_id: null }).eq("trail_id", trailId);
+      } catch {}
 
-      // 2. Delete trail record
+      // 2. Delete trail record cleanly
       const { error } = await supabase.from("trails").delete().eq("id", trailId);
       if (error) {
-        // If historical bookings prevent hard deletion, set to inactive/closed instead
-        if (error.message?.includes("foreign key") || error.code === "23503") {
+        const isFkErr =
+          error.message?.includes("foreign key") ||
+          error.code === "23503" ||
+          (error as any).status === 409 ||
+          (error as any).statusCode === "409";
+        if (isFkErr) {
           const { error: deactErr } = await supabase
             .from("trails")
             .update({ active: false })
             .eq("id", trailId);
           if (deactErr) throw deactErr;
-          toast.info(`"${deletingTrail.name}" has bookings recorded in the system, so it was set to Inactive (Closed) and hidden from trekkers.`);
+          toast.info(`"${deletingTrail.name}" deactivated and hidden from public views.`);
         } else {
           throw error;
         }

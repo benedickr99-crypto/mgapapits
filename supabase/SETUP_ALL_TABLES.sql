@@ -126,6 +126,16 @@ CREATE INDEX IF NOT EXISTS idx_bookings_status ON public.bookings(status);
 CREATE INDEX IF NOT EXISTS idx_bookings_user_id ON public.bookings(user_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_guide_id ON public.bookings(guide_id);
 
+-- Ensure cascading delete from trails to bookings so deleting a trail never results in a 409 conflict
+DO $$
+BEGIN
+    ALTER TABLE public.bookings DROP CONSTRAINT IF EXISTS bookings_trail_id_fkey;
+    ALTER TABLE public.bookings ADD CONSTRAINT bookings_trail_id_fkey 
+        FOREIGN KEY (trail_id) REFERENCES public.trails(id) ON DELETE CASCADE;
+EXCEPTION
+    WHEN others THEN NULL;
+END $$;
+
 -- 6. Create booking_participants table
 CREATE TABLE IF NOT EXISTS public.booking_participants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
