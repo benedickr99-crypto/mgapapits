@@ -703,10 +703,10 @@ export default function Admin() {
 
       // 1. Delete associated child schedules & reviews if any
       try {
-        await supabase.from("trekking_schedules").delete().eq("trail_id", trailId);
+        await (supabase.from as any)("trekking_schedules").delete().eq("trail_id", trailId);
       } catch {}
       try {
-        await supabase.from("ratings_reviews").delete().eq("trail_id", trailId);
+        await (supabase.from as any)("ratings_reviews").delete().eq("trail_id", trailId);
       } catch {}
 
       // 2. Delete trail record
