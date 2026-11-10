@@ -6,11 +6,11 @@ export default function RequireAdmin({
 }: {
   children: JSX.Element;
 }) {
-  const { user, loading, isAdmin } = useAuth();
+  const { user, profile, loading, isAdmin } = useAuth();
 
-  if (loading) {
+  if (loading || (user && !profile)) {
     return (
-      <div className="flex items-center justify-center h-screen text-gray-500">
+      <div className="flex items-center justify-center h-screen text-gray-500 font-medium">
         Loading admin panel...
       </div>
     );

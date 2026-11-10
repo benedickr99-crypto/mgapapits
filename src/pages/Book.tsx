@@ -127,7 +127,7 @@ export default function Book() {
 
   const [step, setStep] = useState(1);
 
-  // Trails state - ⚡ INSTANT CACHED LOAD
+  // Trails state - INSTANT CACHED LOAD
   const [trails, setTrails] = useState<Trail[]>(() => {
     return getCached<Trail[]>("nnnp_trails") || [];
   });
@@ -213,7 +213,7 @@ export default function Book() {
       const cached = getCached<Trail[]>("nnnp_trails");
       if (cached && cached.length > 0) {
         setTrails(cached);
-        if (!initialTrailId && !trailId) setTrailId(cached[0].id);
+        if (!initialTrailId) setTrailId((curr) => curr || cached[0].id);
         setFetchingTrails(false);
       }
 
@@ -227,7 +227,9 @@ export default function Book() {
         if (!error && data) {
           setTrails(data);
           setCached("nnnp_trails", data, 15 * 60 * 1000);
-          if (data.length > 0 && !initialTrailId && !trailId) setTrailId(data[0].id);
+          if (data.length > 0) {
+            setTrailId((curr) => (!initialTrailId && !curr ? data[0].id : curr));
+          }
         }
       } catch (err) {
         console.warn("Trails fetch failed:", err);
@@ -710,7 +712,7 @@ export default function Book() {
                         ? "bg-amber-50 text-amber-800 border-amber-200" 
                         : "bg-emerald-50 text-emerald-800 border-emerald-200"
                     }`}>
-                      {isKumaliskisTrail ? "🌿 Daily Schedule" : "🗓️ Weekly Schedule"}
+                      {isKumaliskisTrail ? "Daily Schedule" : "Weekly Schedule"}
                     </span>
                   </div>
 

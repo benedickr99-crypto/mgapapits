@@ -59,7 +59,7 @@ const FAQ = () => {
     <div ref={scrollRef} className="bg-gray-50 min-h-screen">
 
       {/* HERO */}
-      <section className="bg-gradient-to-r from-green-800 to-green-700 text-white py-16">
+      <section className="bg-gradient-to-r from-emerald-800 to-emerald-700 text-white py-16">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <h1 className="text-4xl font-bold">
             Frequently Asked Questions
@@ -78,7 +78,7 @@ const FAQ = () => {
             onClick={() => setActiveCategory(cat)}
             className={`px-4 py-2 rounded-full text-sm transition ${
               activeCategory === cat
-                ? "bg-green-700 text-white"
+                ? "bg-emerald-700 text-white"
                 : "bg-white border hover:bg-gray-100"
             }`}
           >

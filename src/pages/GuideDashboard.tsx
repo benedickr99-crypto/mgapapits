@@ -143,7 +143,7 @@ export default function GuideDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user]);
 
   const fetchAvailability = useCallback(async () => {
     if (!user) return;
@@ -160,7 +160,7 @@ export default function GuideDashboard() {
     } catch (err) {
       console.error("Error fetching availability:", err);
     }
-  }, [user?.id]);
+  }, [user]);
 
   const fetchIncidents = useCallback(async () => {
     if (!user) return;
@@ -170,7 +170,7 @@ export default function GuideDashboard() {
     } catch (err) {
       console.error("Error fetching incidents:", err);
     }
-  }, [user?.id]);
+  }, [user]);
 
   const fetchGuideReviews = useCallback(async (currentBookings?: Booking[]) => {
     if (!user?.id) return;
@@ -194,7 +194,7 @@ export default function GuideDashboard() {
     } finally {
       setLoadingReviews(false);
     }
-  }, [user?.id, profile?.id, profile?.full_name]);
+  }, [user, profile?.id, profile?.full_name, bookings]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -245,6 +245,7 @@ export default function GuideDashboard() {
       supabase.removeChannel(profileChannel);
       supabase.removeChannel(bookingsChannel);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
   const handleSubmitIncident = async (e: React.FormEvent) => {
@@ -272,7 +273,7 @@ export default function GuideDashboard() {
       });
 
       if (res.success) {
-        toast.success("🚨 Incident report transmitted directly to Park Admin & Dispatch!");
+        toast.success("Incident report transmitted directly to Park Admin & Dispatch!");
         setShowIncidentModal(false);
         setIncidentForm({
           trail_name: "",
@@ -318,7 +319,7 @@ export default function GuideDashboard() {
         try {
           await supabase.from("notifications").insert({
             user_id: updatedBooking.user_id,
-            title: decision === "accept" ? "✅ Tour Guide Confirmed" : "⚠️ Tour Guide Declined",
+            title: decision === "accept" ? "Tour Guide Confirmed" : "Tour Guide Declined",
             message: decision === "accept"
               ? `${guideName} has accepted and confirmed your trek for ${trailName} on ${updatedBooking.climb_date}.`
               : `${guideName} is unavailable for ${trailName} on ${updatedBooking.climb_date}. An administrator will assign another guide.`,
@@ -356,7 +357,7 @@ export default function GuideDashboard() {
         try {
           await supabase.from("notifications").insert({
             user_id: updatedBooking.user_id,
-            title: "🌟 Trek Completed — Leave a Review!",
+            title: "Trek Completed — Leave a Review!",
             message: `Congratulations on completing your trek on ${updatedBooking.climb_date}! Please share your feedback and rate your tour guide.`,
             type: "booking_approved",
             read: false,
@@ -668,7 +669,7 @@ export default function GuideDashboard() {
             {/* Content body */}
             <div className="p-8 space-y-6">
               <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-xs text-amber-900 leading-relaxed">
-                <p className="font-bold text-sm text-amber-950 mb-1">📋 What happens next?</p>
+                <p className="font-bold text-sm text-amber-950 mb-1">What happens next?</p>
                 <p>
                   The DENR NNNP Protected Area Management Board / Park Administrator must manually inspect and verify your submitted Tour Guide ID or Mountaineering Accreditation Certificate before activating your guide assignments.
                 </p>
@@ -703,7 +704,7 @@ export default function GuideDashboard() {
               {profile?.guide_id_url && (
                 <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50">
                   <span className="text-xs font-black uppercase tracking-wider text-gray-500 block mb-2">
-                    📎 Uploaded ID / Certificate
+                    Uploaded ID / Certificate
                   </span>
                   {/\.(jpg|jpeg|png|gif|webp)$/i.test(profile.guide_id_url) ? (
                     <div className="rounded-xl overflow-hidden border border-gray-200 bg-white">
@@ -961,7 +962,7 @@ export default function GuideDashboard() {
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Trekker Rating</p>
               <p className="text-2xl font-black text-slate-900">
                 {guideReviews.length > 0 ? avgGuideRating.toFixed(1) : "0.0"}{" "}
-                <span className="text-xs font-bold text-amber-500">★</span>
+                <Star size={14} className="inline fill-amber-400 text-amber-500 mb-0.5 ml-0.5" />
               </p>
             </div>
           </div>
@@ -1332,7 +1333,7 @@ export default function GuideDashboard() {
                       : inc.severity === "high"
                       ? "bg-amber-100 text-amber-800 border-amber-200"
                       : inc.severity === "medium"
-                      ? "bg-yellow-50 text-yellow-800 border-yellow-200"
+                      ? "bg-amber-50 text-amber-800 border-amber-200"
                       : "bg-blue-50 text-blue-800 border-blue-200";
 
                   const statusBadge =
@@ -1924,7 +1925,7 @@ export default function GuideDashboard() {
                         {/* Trail destination */}
                         {rev.trail_name && (
                           <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-xl truncate max-w-[160px]">
-                            📍 {rev.trail_name}
+                            {rev.trail_name}
                           </span>
                         )}
                       </div>
@@ -2174,12 +2175,12 @@ export default function GuideDashboard() {
                   onChange={(e) => setIncidentForm({ ...incidentForm, category: e.target.value as any })}
                   className="w-full border border-gray-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-rose-500 outline-none bg-white font-medium"
                 >
-                  <option value="medical">🩺 Medical / Physical Injury</option>
-                  <option value="hazard">⚠️ Trail Hazard / Landslide</option>
-                  <option value="lost_trekker">🧭 Lost / Separated Trekker</option>
-                  <option value="weather">⛈️ Severe Weather / Flash Flood</option>
-                  <option value="violation">🚫 Rule / Wildlife Violation</option>
-                  <option value="other">📌 Other Concern</option>
+                  <option value="medical">Medical / Physical Injury</option>
+                  <option value="hazard">Trail Hazard / Landslide</option>
+                  <option value="lost_trekker">Lost / Separated Trekker</option>
+                  <option value="weather">Severe Weather / Flash Flood</option>
+                  <option value="violation">Rule / Wildlife Violation</option>
+                  <option value="other">Other Concern</option>
                 </select>
               </div>
 

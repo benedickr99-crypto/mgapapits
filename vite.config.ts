@@ -4,11 +4,15 @@ import tsconfigPaths from 'vite-tsconfig-paths'
 
 export default defineConfig({
   plugins: [react(), tsconfigPaths()],
+  assetsInclude: ['**/*.mp4'],
   server: {
     host: true,
     port: 5173,
     hmr: {
       port: 5173,
+    },
+    headers: {
+      'Accept-Ranges': 'bytes',
     },
   },
   build: {

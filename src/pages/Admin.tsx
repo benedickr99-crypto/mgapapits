@@ -125,9 +125,10 @@ type TrailRecord = {
   description: string | null;
   barangay: string | null;
   city: string | null;
+  difficulty?: string | null;
   weekly_slots?: number | null;
   active: boolean | null;
-  created_at: string;
+  created_at?: string;
 };
 
 type NotificationItem = {
@@ -224,7 +225,18 @@ export default function Admin() {
   const [deletingUser, setDeletingUser] = useState<UserProfile | null>(null);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
   const [editingTrail, setEditingTrail] = useState<TrailRecord | null>(null);
-  const [newTrailLimit, setNewTrailLimit] = useState<number>(50);
+  const [deletingTrail, setDeletingTrail] = useState<TrailRecord | null>(null);
+  const [isDeletingTrail, setIsDeletingTrail] = useState(false);
+  const [isCreatingTrail, setIsCreatingTrail] = useState(false);
+  const [trailForm, setTrailForm] = useState({
+    name: "",
+    barangay: "",
+    city: "",
+    difficulty: "Moderate",
+    description: "",
+    weekly_slots: 30,
+    active: true,
+  });
 
   // Bookings tab filters & search
   const [bookingSearch, setBookingSearch] = useState("");
@@ -601,24 +613,129 @@ export default function Admin() {
     }
   };
 
-  // Trail Quota Limit / Active toggle
+  // Trail Update, Create & Delete Operations
   const handleSaveTrail = async () => {
     if (!editingTrail) return;
     try {
+      const payload = {
+        name: editingTrail.name?.trim() || "Untitled Trail",
+        barangay: editingTrail.barangay?.trim() || "N/A",
+        city: editingTrail.city?.trim() || "N/A",
+        difficulty: editingTrail.difficulty?.trim() || "Moderate",
+        description: editingTrail.description?.trim() || "",
+        weekly_slots: Number(editingTrail.weekly_slots) || 30,
+        active: editingTrail.active ?? true,
+      };
+
       const { error } = await supabase
         .from("trails")
-        .update({ weekly_slots: newTrailLimit, active: editingTrail.active ?? true })
+        .update(payload)
         .eq("id", editingTrail.id);
 
       if (error) throw error;
 
-      toast.success("Trail configuration updated!");
+      toast.success(`Trail "${payload.name}" updated successfully!`);
+      try {
+        localStorage.removeItem("nnnp_trails");
+      } catch {}
+
       setTrailsList((prev) =>
-        prev.map((t) => (t.id === editingTrail.id ? { ...t, weekly_slots: newTrailLimit, active: editingTrail.active } : t))
+        prev.map((t) => (t.id === editingTrail.id ? { ...t, ...payload } : t))
       );
       setEditingTrail(null);
     } catch (err: any) {
-      toast.error("Failed to update trail: " + err.message);
+      toast.error("Failed to update trail: " + (err.message || "Unknown error"));
+    }
+  };
+
+  const handleCreateTrail = async () => {
+    if (!trailForm.name.trim()) {
+      toast.error("Please enter a trail name.");
+      return;
+    }
+    try {
+      const payload = {
+        name: trailForm.name.trim(),
+        barangay: trailForm.barangay.trim() || "N/A",
+        city: trailForm.city.trim() || "N/A",
+        difficulty: trailForm.difficulty || "Moderate",
+        description: trailForm.description.trim() || "",
+        weekly_slots: Number(trailForm.weekly_slots) || 30,
+        active: trailForm.active ?? true,
+      };
+
+      const { data, error } = await supabase
+        .from("trails")
+        .insert(payload)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success(`Trail "${payload.name}" added successfully!`);
+      try {
+        localStorage.removeItem("nnnp_trails");
+      } catch {}
+
+      if (data) {
+        setTrailsList((prev) => [...prev, data as unknown as TrailRecord]);
+      }
+      setIsCreatingTrail(false);
+      setTrailForm({
+        name: "",
+        barangay: "",
+        city: "",
+        difficulty: "Moderate",
+        description: "",
+        weekly_slots: 30,
+        active: true,
+      });
+    } catch (err: any) {
+      toast.error("Failed to create trail: " + (err.message || "Unknown error"));
+    }
+  };
+
+  const handleDeleteTrail = async () => {
+    if (!deletingTrail) return;
+    try {
+      setIsDeletingTrail(true);
+      const trailId = deletingTrail.id;
+
+      // 1. Delete associated child schedules & reviews if any
+      try {
+        await supabase.from("trekking_schedules").delete().eq("trail_id", trailId);
+      } catch {}
+      try {
+        await supabase.from("ratings_reviews").delete().eq("trail_id", trailId);
+      } catch {}
+
+      // 2. Delete trail record
+      const { error } = await supabase.from("trails").delete().eq("id", trailId);
+      if (error) {
+        // If historical bookings prevent hard deletion, set to inactive/closed instead
+        if (error.message?.includes("foreign key") || error.code === "23503") {
+          const { error: deactErr } = await supabase
+            .from("trails")
+            .update({ active: false })
+            .eq("id", trailId);
+          if (deactErr) throw deactErr;
+          toast.info(`"${deletingTrail.name}" has bookings recorded in the system, so it was set to Inactive (Closed) and hidden from trekkers.`);
+        } else {
+          throw error;
+        }
+      } else {
+        toast.success(`"${deletingTrail.name}" deleted successfully.`);
+      }
+
+      try {
+        localStorage.removeItem("nnnp_trails");
+      } catch {}
+      setTrailsList((prev) => prev.filter((t) => t.id !== trailId));
+      setDeletingTrail(null);
+    } catch (err: any) {
+      toast.error("Failed to delete trail: " + (err.message || "Unknown error"));
+    } finally {
+      setIsDeletingTrail(false);
     }
   };
 
@@ -1337,54 +1454,85 @@ export default function Admin() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
                 <div>
                   <h2 className="text-lg font-bold text-slate-900">Protected Trekking Trails</h2>
-                  <p className="text-xs text-slate-500">Manage trail capacity quotas, daily limits, and active reservation status</p>
+                  <p className="text-xs text-slate-500">Manage trail details, capacity quotas, daily limits, and active reservation status</p>
                 </div>
+                <button
+                  onClick={() => setIsCreatingTrail(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition self-start sm:self-auto"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add New Trail
+                </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-                {trailsList.map((t) => {
-                  const meta = NNNP_TRAILS_METADATA[t.id] || Object.values(NNNP_TRAILS_METADATA).find(m => m.name.toLowerCase().includes(t.name.toLowerCase()));
-                  return (
-                    <div key={t.id} className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition flex flex-col justify-between">
-                      <div className="relative h-40 bg-slate-900">
-                        <img
-                          src={meta?.imageUrl || "/images/trails/kumalisikis.jpg"}
-                          alt={t.name}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute top-3 right-3">
-                          <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full text-white shadow-xs ${t.active ? "bg-emerald-600" : "bg-red-600"}`}>
-                            {t.active ? "Active" : "Closed"}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-                        <div>
-                          <h3 className="font-bold text-slate-900 text-sm">{t.name}</h3>
-                          <p className="text-xs text-slate-500 mt-0.5">{t.barangay}, {t.city}</p>
-                          <div className="mt-3 pt-2 border-t text-[11px] text-slate-600 space-y-1">
-                            <p>Elevation: <strong>{meta?.elevation || "Highland"}</strong></p>
-                            <p>Weekly Capacity Limit: <strong>{t.weekly_slots || 50} Trekkers/Week</strong></p>
+              {trailsList.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-xs">
+                  No trails found. Click "+ Add New Trail" to create one.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                  {trailsList.map((t) => {
+                    const meta = NNNP_TRAILS_METADATA[t.id] || Object.values(NNNP_TRAILS_METADATA).find(m => m.name.toLowerCase().includes(t.name.toLowerCase()));
+                    return (
+                      <div key={t.id} className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition flex flex-col justify-between">
+                        <div className="relative h-40 bg-slate-900">
+                          <img
+                            src={meta?.imageUrl || "/images/trails/kumalisikis.jpg"}
+                            alt={t.name}
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                            <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full text-white shadow-xs ${t.active ? "bg-emerald-600" : "bg-red-600"}`}>
+                              {t.active ? "Active" : "Closed"}
+                            </span>
                           </div>
                         </div>
 
-                        <div className="pt-2 flex gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingTrail(t);
-                              setNewTrailLimit(t.weekly_slots || 50);
-                            }}
-                            className="flex-1 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl font-bold text-xs transition"
-                          >
-                            Configure Limits
-                          </button>
+                        <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                          <div>
+                            <div className="flex items-start justify-between gap-1">
+                              <h3 className="font-bold text-slate-900 text-sm leading-snug">{t.name}</h3>
+                              {t.difficulty && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 shrink-0">
+                                  {t.difficulty}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5">{t.barangay || "N/A"}, {t.city || "N/A"}</p>
+                            <div className="mt-3 pt-2 border-t text-[11px] text-slate-600 space-y-1">
+                              <p>Elevation: <strong>{meta?.elevation || "Highland"}</strong></p>
+                              <p>Weekly Capacity Limit: <strong>{t.weekly_slots || 30} Trekkers/Week</strong></p>
+                              {t.description && (
+                                <p className="text-slate-500 text-[10px] line-clamp-2 mt-1 italic">
+                                  "{t.description}"
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="pt-2 flex gap-2">
+                            <button
+                              onClick={() => setEditingTrail(t)}
+                              className="flex-1 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                              Update Trail
+                            </button>
+                            <button
+                              onClick={() => setDeletingTrail(t)}
+                              className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-bold text-xs transition border border-red-100 flex items-center justify-center gap-1"
+                              title="Delete Trail"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Delete
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -2026,29 +2174,88 @@ export default function Admin() {
         </Dialog>
       )}
 
-      {/* Edit Trail Limit Modal */}
+      {/* Edit & Update Trail Modal */}
       {editingTrail && (
         <Dialog open={!!editingTrail} onOpenChange={() => setEditingTrail(null)}>
-          <DialogContent className="max-w-md bg-white rounded-3xl p-6">
+          <DialogContent className="max-w-lg bg-white rounded-3xl p-6">
             <DialogHeader>
-              <DialogTitle className="text-lg font-bold text-slate-900">
-                Configure Trail Limits
+              <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Edit className="w-5 h-5 text-emerald-600" />
+                Update Protected Trail
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                Update daily climber capacity quota for {editingTrail.name}
+                Modify details, carrying capacity, or status for {editingTrail.name}
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 my-2 text-xs">
+            <div className="space-y-3.5 my-2 text-xs">
               <div>
-                <label className="font-bold text-slate-700 block mb-1.5">Weekly Trekker Capacity Limit:</label>
+                <label className="font-bold text-slate-700 block mb-1">Trail Name *</label>
                 <input
-                  type="number"
-                  min={5}
-                  max={500}
-                  value={newTrailLimit}
-                  onChange={(e) => setNewTrailLimit(Number(e.target.value))}
+                  type="text"
+                  value={editingTrail.name || ""}
+                  onChange={(e) => setEditingTrail({ ...editingTrail, name: e.target.value })}
                   className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Barangay</label>
+                  <input
+                    type="text"
+                    value={editingTrail.barangay || ""}
+                    onChange={(e) => setEditingTrail({ ...editingTrail, barangay: e.target.value })}
+                    className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">City / Municipality</label>
+                  <input
+                    type="text"
+                    value={editingTrail.city || ""}
+                    onChange={(e) => setEditingTrail({ ...editingTrail, city: e.target.value })}
+                    className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Difficulty</label>
+                  <select
+                    value={editingTrail.difficulty || "Moderate"}
+                    onChange={(e) => setEditingTrail({ ...editingTrail, difficulty: e.target.value })}
+                    className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                  >
+                    <option value="Easy">Easy</option>
+                    <option value="Easy-Moderate">Easy–Moderate</option>
+                    <option value="Moderate">Moderate</option>
+                    <option value="Moderate-Hard">Moderate–Hard</option>
+                    <option value="Hard">Hard / Challenging</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Weekly Trekkers Limit</label>
+                  <input
+                    type="number"
+                    min={5}
+                    max={500}
+                    value={editingTrail.weekly_slots || 30}
+                    onChange={(e) => setEditingTrail({ ...editingTrail, weekly_slots: Number(e.target.value) })}
+                    className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={editingTrail.description || ""}
+                  onChange={(e) => setEditingTrail({ ...editingTrail, description: e.target.value })}
+                  placeholder="Trail description, highlights, terrain features..."
+                  className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
                 />
               </div>
 
@@ -2058,27 +2265,192 @@ export default function Admin() {
                   id="trailActiveToggle"
                   checked={editingTrail.active ?? true}
                   onChange={(e) => setEditingTrail({ ...editingTrail, active: e.target.checked })}
-                  className="rounded text-emerald-600"
+                  className="rounded text-emerald-600 w-4 h-4"
                 />
-                <label htmlFor="trailActiveToggle" className="font-bold text-slate-700">
+                <label htmlFor="trailActiveToggle" className="font-bold text-slate-700 cursor-pointer">
                   Trail is Open & Accepting Bookings
                 </label>
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className="flex gap-2 pt-3">
                 <button
                   type="button"
                   onClick={() => setEditingTrail(null)}
-                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleSaveTrail}
-                  className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs"
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs"
                 >
-                  Save Settings
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Delete Trail Confirmation Modal */}
+      {deletingTrail && (
+        <Dialog open={!!deletingTrail} onOpenChange={() => !isDeletingTrail && setDeletingTrail(null)}>
+          <DialogContent className="max-w-md bg-white rounded-3xl p-6">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-red-600 flex items-center gap-2">
+                <Trash2 className="w-5 h-5 text-red-600" />
+                Delete Protected Trail
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500">
+                Are you sure you want to delete <strong>{deletingTrail.name}</strong>?
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 my-2 text-xs">
+              <div className="bg-red-50 text-red-800 p-3.5 rounded-2xl border border-red-200">
+                <p className="font-semibold">Warning: This action will permanently remove this trail from public listings and bookings.</p>
+                <p className="text-[11px] text-red-600 mt-1">If previous bookings are linked to this trail, it will be automatically archived and set to Inactive to preserve booking history.</p>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeletingTrail(null)}
+                  disabled={isDeletingTrail}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteTrail}
+                  disabled={isDeletingTrail}
+                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-xs flex items-center justify-center gap-2"
+                >
+                  {isDeletingTrail ? <Loader2 className="w-4 h-4 animate-spin" /> : "Yes, Delete Trail"}
+                </button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Create New Trail Modal */}
+      {isCreatingTrail && (
+        <Dialog open={isCreatingTrail} onOpenChange={() => setIsCreatingTrail(false)}>
+          <DialogContent className="max-w-lg bg-white rounded-3xl p-6">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Plus className="w-5 h-5 text-emerald-600" />
+                Add New Protected Trail
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500">
+                Register a new trekking destination into the Northern Negros Natural Park network
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3.5 my-2 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Trail Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Mt. Silay Trail"
+                  value={trailForm.name}
+                  onChange={(e) => setTrailForm({ ...trailForm, name: e.target.value })}
+                  className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Barangay</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Brgy. Patag"
+                    value={trailForm.barangay}
+                    onChange={(e) => setTrailForm({ ...trailForm, barangay: e.target.value })}
+                    className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">City / Municipality</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Silay City"
+                    value={trailForm.city}
+                    onChange={(e) => setTrailForm({ ...trailForm, city: e.target.value })}
+                    className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Difficulty</label>
+                  <select
+                    value={trailForm.difficulty}
+                    onChange={(e) => setTrailForm({ ...trailForm, difficulty: e.target.value })}
+                    className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                  >
+                    <option value="Easy">Easy</option>
+                    <option value="Easy-Moderate">Easy–Moderate</option>
+                    <option value="Moderate">Moderate</option>
+                    <option value="Moderate-Hard">Moderate–Hard</option>
+                    <option value="Hard">Hard / Challenging</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Weekly Trekkers Limit</label>
+                  <input
+                    type="number"
+                    min={5}
+                    max={500}
+                    value={trailForm.weekly_slots}
+                    onChange={(e) => setTrailForm({ ...trailForm, weekly_slots: Number(e.target.value) })}
+                    className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Description / Notes</label>
+                <textarea
+                  rows={2}
+                  placeholder="Trail description, highlights, terrain features..."
+                  value={trailForm.description}
+                  onChange={(e) => setTrailForm({ ...trailForm, description: e.target.value })}
+                  className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="createTrailActive"
+                  checked={trailForm.active}
+                  onChange={(e) => setTrailForm({ ...trailForm, active: e.target.checked })}
+                  className="rounded text-emerald-600 w-4 h-4"
+                />
+                <label htmlFor="createTrailActive" className="font-bold text-slate-700 cursor-pointer">
+                  Activate Immediately (Open for Bookings)
+                </label>
+              </div>
+
+              <div className="flex gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingTrail(false)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateTrail}
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs"
+                >
+                  Create Trail
                 </button>
               </div>
             </div>

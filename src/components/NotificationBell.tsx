@@ -67,7 +67,7 @@ export default function NotificationBell() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button className="relative p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500/20">
+        <button className="relative p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20">
           <Bell size={20} />
           {unreadCount > 0 && (
             <span className="absolute -top-0.5 -right-0.5 flex min-w-[18px] h-[18px] px-1 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-xs ring-2 ring-white leading-none pointer-events-none">
@@ -84,7 +84,7 @@ export default function NotificationBell() {
             {unreadCount > 0 && (
               <button
                 onClick={() => markAllAsRead()}
-                className="text-[11px] font-medium text-green-600 hover:text-green-700 transition flex items-center gap-1"
+                className="text-[11px] font-medium text-emerald-600 hover:text-emerald-700 transition flex items-center gap-1"
               >
                 <Check size={12} /> Mark all read
               </button>
@@ -117,7 +117,7 @@ export default function NotificationBell() {
                   key={notification.id}
                   onClick={() => handleNotificationClick(notification)}
                   className={`px-4 py-3 border-b last:border-0 cursor-pointer transition-colors hover:bg-gray-100 flex gap-3 group items-start ${
-                    notification.read ? 'opacity-70' : 'bg-green-50/30'
+                    notification.read ? 'opacity-70' : 'bg-emerald-50/40'
                   }`}
                 >
                   <div className="mt-1">
@@ -147,7 +147,7 @@ export default function NotificationBell() {
                   <div className="flex items-center gap-1 shrink-0 self-center">
                     {!notification.read && (
                       <span title="Unread" className="hidden sm:inline-block">
-                        <CheckCircle2 size={14} className="text-green-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <CheckCircle2 size={14} className="text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </span>
                     )}
                     <button

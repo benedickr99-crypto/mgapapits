@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Cloud, CloudRain, Sun, Wind, Droplets, AlertTriangle, CheckCircle2, ShieldAlert, RefreshCw } from "lucide-react";
 import { fetchTrailWeather, type TrailheadWeather } from "@/lib/weather";
 
@@ -13,16 +13,16 @@ export const WeatherWidget = ({ lat, lng, trailName, compact = false }: WeatherW
   const [weather, setWeather] = useState<TrailheadWeather | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     const data = await fetchTrailWeather(lat, lng, trailName);
     setWeather(data);
     setLoading(false);
-  };
+  }, [lat, lng, trailName]);
 
   useEffect(() => {
     loadData();
-  }, [lat, lng, trailName]);
+  }, [loadData]);
 
   if (loading) {
     return (

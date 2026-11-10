@@ -29,16 +29,16 @@ const SiteFooter = () => {
           <h3 className="font-semibold mb-4">Quick Links</h3>
 
           <div className="flex flex-col gap-2 text-sm text-white/70">
-            <Link to="/" className="hover:text-yellow-400 transition">
+            <Link to="/" className="hover:text-emerald-400 transition">
               Home
             </Link>
-            <Link to="/trails" className="hover:text-yellow-400 transition">
+            <Link to="/trails" className="hover:text-emerald-400 transition">
               Trails
             </Link>
-            <Link to="/process" className="hover:text-yellow-400 transition">
+            <Link to="/process" className="hover:text-emerald-400 transition">
               Process
             </Link>
-            <Link to="/booking" className="hover:text-yellow-400 transition">
+            <Link to="/booking" className="hover:text-emerald-400 transition">
               Book
             </Link>
           </div>

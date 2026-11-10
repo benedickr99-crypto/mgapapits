@@ -1,7 +1,21 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate, Link } from "react-router-dom";
-import { Eye, EyeOff, Loader2, Upload, FileCheck, X, ShieldCheck, Shield, FileText, CheckCircle2, Check } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  Loader2,
+  Upload,
+  FileCheck,
+  X,
+  ShieldCheck,
+  Shield,
+  FileText,
+  CheckCircle2,
+  Check,
+  Mail,
+  ArrowLeft,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +23,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
+import { toast } from "sonner";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -27,6 +47,23 @@ export default function Login() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // OTP Verification state for post-registration & login
+  const [isOtpVerification, setIsOtpVerification] = useState(false);
+  const [isLoginOtp, setIsLoginOtp] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
+
+  // Cached registration data for completing setup after OTP
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [pendingPassword, setPendingPassword] = useState("");
+  const [pendingRole, setPendingRole] = useState("trekker");
+  const [pendingFullName, setPendingFullName] = useState("");
+  const [pendingPhone, setPendingPhone] = useState("");
+  const [pendingAddress, setPendingAddress] = useState("");
+  const [pendingGuideIdUrl, setPendingGuideIdUrl] = useState<string | null>(null);
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+
   // Terms and Conditions & Privacy Policy state
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [policyModalType, setPolicyModalType] = useState<"terms" | "privacy" | null>(null);
@@ -36,6 +73,14 @@ export default function Login() {
   const [guideIdPreview, setGuideIdPreview] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   const validateEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -219,94 +264,90 @@ export default function Login() {
 
         const userId = signUpData?.user?.id;
 
-        // Step 3: Explicitly update the profile if userId is available
-        if (role === "guide" && userId) {
-          try {
-            await supabase
-              .from("profiles")
-              .update({
-                address: address.trim(),
-                phone: phone.trim(),
-                email: email.trim(),
-                guide_id_url: guideIdUrl,
-                guide_application_status: "pending",
-                is_available: false,
-              } as any)
-              .eq("id", userId);
-          } catch (profErr) {
-            console.warn("Direct profile update skipped (handled by trigger):", profErr);
+        // Save pending details for OTP verification
+        const targetEmail = email.trim();
+        setPendingEmail(targetEmail);
+        setPendingPassword(password);
+        setPendingRole(role);
+        setPendingFullName(fullName.trim());
+        setPendingPhone(phone.trim());
+        setPendingAddress(address.trim());
+        setPendingGuideIdUrl(guideIdUrl);
+        setPendingUserId(userId || null);
+
+        // If email confirmation is disabled and session already exists, proceed immediately
+        if (signUpData.session) {
+          toast.success("Account created successfully!");
+          if (role === "guide") {
+            navigate("/guide-dashboard");
+          } else {
+            navigate("/");
           }
+          return;
+        }
 
-          // Step 4: Notify admins that a new guide applicant has registered
-          try {
-            const { data: admins } = await supabase
-              .from("profiles")
-              .select("id")
-              .eq("role", "admin");
-
-            if (admins && admins.length > 0) {
-              const notifications = admins.map((admin) => ({
-                user_id: admin.id,
-                title: "📋 New Tour Guide Application",
-                message: `${fullName || "A new applicant"} has submitted credentials for Tour Guide accreditation and is waiting for your review.`,
-                type: "guide_application_submitted",
-                link: "/admin?tab=guides",
-                entity_id: userId,
-              }));
-              const { error: notifErr } = await supabase.from("notifications").insert(notifications);
-              if (notifErr) {
-                const fallbackNotifications = notifications.map((n) => ({ ...n, type: "booking_created" }));
-                await supabase.from("notifications").insert(fallbackNotifications);
-              }
-            }
-          } catch (notifErr) {
-            console.warn("Could not notify admin about new guide applicant:", notifErr);
+        // Send 6-digit OTP code to email
+        const { error: otpErr } = await supabase.auth.signInWithOtp({
+          email: targetEmail,
+        });
+        if (otpErr) {
+          // If signInWithOtp throws, try resend fallback
+          const { error: resendErr } = await supabase.auth.resend({
+            type: "signup",
+            email: targetEmail,
+          });
+          if (resendErr) {
+            console.warn("Could not send initial signup OTP:", resendErr);
           }
         }
 
-        setSuccess(
-          role === "guide"
-            ? "✅ Tour Guide application submitted successfully! Your accreditation certificate is pending review by the Park Administrator."
-            : "✅ Account created! Check your email to verify your address."
-        );
-        setIsRegister(false);
-        setAgreedToTerms(false);
-        setFullName("");
-        setPhone("");
-        setAddress("");
-        setPassword("");
-        setConfirmPassword("");
-        removeFile();
+        // Switch to OTP verification view for registration
+        setIsOtpVerification(true);
+        setIsLoginOtp(false);
+        setOtp("");
+        setResendCooldown(60);
+        setError("");
+        setSuccess(`A 6-digit OTP has been sent to ${targetEmail}. Please check your email inbox and enter the code below to complete registration.`);
       } else {
-        const { data: signInData, error } = await supabase.auth.signInWithPassword({
-          email,
+        const targetEmail = email.trim();
+
+        // 1. Validate email and password credentials
+        const { error: signInErr } = await supabase.auth.signInWithPassword({
+          email: targetEmail,
           password,
         });
 
-        if (error) throw error;
-
-        // Smart role redirect based on actual database role
-        if (signInData.user) {
-          try {
-            const { data: prof } = await supabase
-              .from("profiles")
-              .select("role")
-              .eq("id", signInData.user.id)
-              .maybeSingle();
-
-            if (prof?.role === "admin") {
-              navigate("/admin");
-              return;
-            } else if (prof?.role === "guide") {
-              navigate("/guide");
-              return;
-            }
-          } catch {
-            // Default to home on lookup error
+        if (signInErr) {
+          // If email not confirmed, still allow OTP flow to proceed
+          if (!signInErr.message?.toLowerCase().includes("email not confirmed")) {
+            throw signInErr;
           }
+          // For unconfirmed accounts, fall through to OTP verification below
         }
 
-        navigate("/");
+        // 2. Sign out temporary session so user must enter OTP to finalize login
+        try {
+          await supabase.auth.signOut();
+        } catch {}
+
+        // 3. Send 6-digit OTP code to email
+        const { error: otpErr } = await supabase.auth.signInWithOtp({
+          email: targetEmail,
+        });
+        if (otpErr) {
+          throw new Error("Failed to send OTP to email: " + otpErr.message);
+        }
+
+        // 4. Switch to OTP view
+        setPendingEmail(targetEmail);
+        setPendingPassword(password);
+        setIsOtpVerification(true);
+        setIsLoginOtp(true);
+        setOtp("");
+        setResendCooldown(60);
+        setError("");
+        setSuccess(`Login credentials verified! A 6-digit OTP has been sent to ${targetEmail}. Please check your inbox and enter it below to complete sign-in.`);
+        return;
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong";
@@ -317,31 +358,412 @@ export default function Login() {
     }
   };
 
+  const handleVerifyOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (otp.trim().length < 6) {
+      setError("Please enter the complete 6-digit OTP.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const cleanToken = otp.trim();
+      const targetEmail = (pendingEmail || email).trim();
+      const targetPhone = pendingPhone.trim();
+
+      // Verify OTP (try email first, with type fallback)
+      let verifyRes;
+      if (isLoginOtp) {
+        verifyRes = await supabase.auth.verifyOtp({
+          email: targetEmail,
+          token: cleanToken,
+          type: "email",
+        });
+        if (verifyRes.error) {
+          const fallback = await supabase.auth.verifyOtp({
+            email: targetEmail,
+            token: cleanToken,
+            type: "signup",
+          });
+          if (!fallback.error) verifyRes = fallback;
+        }
+      } else {
+        verifyRes = await supabase.auth.verifyOtp({
+          email: targetEmail,
+          token: cleanToken,
+          type: "signup",
+        });
+        if (verifyRes.error) {
+          const fallback = await supabase.auth.verifyOtp({
+            email: targetEmail,
+            token: cleanToken,
+            type: "email",
+          });
+          if (!fallback.error) verifyRes = fallback;
+        }
+      }
+
+      // If phone OTP was used as fallback
+      if (verifyRes.error && targetPhone) {
+        const phoneFallback = await supabase.auth.verifyOtp({
+          phone: targetPhone,
+          token: cleanToken,
+          type: "sms",
+        });
+        if (!phoneFallback.error) verifyRes = phoneFallback;
+      }
+
+      // If OTP verification failed, throw the error directly
+      if (verifyRes.error) {
+        throw verifyRes.error;
+      }
+
+      const verifiedUser = verifyRes.data?.user;
+
+      // Handle Login OTP flow
+      if (isLoginOtp) {
+        toast.success("Welcome back! Login verified.");
+        setIsOtpVerification(false);
+        setIsLoginOtp(false);
+        setPassword("");
+        setPendingPassword("");
+
+        const currentUserId = verifiedUser?.id;
+        if (currentUserId) {
+          try {
+            const { data: prof } = await supabase
+              .from("profiles")
+              .select("role")
+              .eq("id", currentUserId)
+              .maybeSingle();
+
+            if (prof?.role === "admin") {
+              navigate("/admin");
+              return;
+            } else if (prof?.role === "guide") {
+              navigate("/guide-dashboard");
+              return;
+            }
+          } catch {}
+        }
+        navigate("/");
+        return;
+      }
+
+      // Handle Registration flow
+      const finalUserId = verifiedUser?.id || pendingUserId;
+
+      // Post-verification for Tour Guides: update profile and alert admin
+      if (pendingRole === "guide" && finalUserId) {
+        try {
+          await supabase
+            .from("profiles")
+            .update({
+              address: pendingAddress.trim(),
+              phone: pendingPhone.trim(),
+              email: targetEmail,
+              guide_id_url: pendingGuideIdUrl,
+              guide_application_status: "pending",
+              is_available: false,
+            } as any)
+            .eq("id", finalUserId);
+        } catch (profErr) {
+          console.warn("Direct profile update skipped:", profErr);
+        }
+
+        try {
+          const { data: admins } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("role", "admin");
+
+          if (admins && admins.length > 0) {
+            const notifications = admins.map((admin) => ({
+              user_id: admin.id,
+              title: "New Tour Guide Application",
+              message: `${pendingFullName || "A new applicant"} has submitted credentials for Tour Guide accreditation and is waiting for your review.`,
+              type: "guide_application_submitted",
+              link: "/admin?tab=guides",
+              entity_id: finalUserId,
+            }));
+            const { error: notifErr } = await supabase.from("notifications").insert(notifications);
+            if (notifErr) {
+              const fallbackNotifications = notifications.map((n) => ({ ...n, type: "booking_created" }));
+              await supabase.from("notifications").insert(fallbackNotifications);
+            }
+          }
+        } catch (notifErr) {
+          console.warn("Could not notify admin about new guide applicant:", notifErr);
+        }
+      }
+
+      toast.success("Registration complete! Welcome to TAKAZZ.");
+
+      // Clear state
+      setIsOtpVerification(false);
+      setIsLoginOtp(false);
+      setFullName("");
+      setPhone("");
+      setAddress("");
+      setPassword("");
+      setConfirmPassword("");
+      setPendingPassword("");
+      removeFile();
+
+      // Smart redirect based on role
+      if (pendingRole === "guide") {
+        navigate("/guide-dashboard");
+      } else {
+        navigate("/");
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Invalid or expired OTP.";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    const targetEmail = (pendingEmail || email).trim();
+    if (!targetEmail || resendCooldown > 0 || resending) return;
+
+    setResending(true);
+    setError("");
+
+    try {
+      if (isLoginOtp) {
+        const { error: otpError } = await supabase.auth.signInWithOtp({
+          email: targetEmail,
+        });
+        if (otpError) throw otpError;
+      } else {
+        const { error: resendError } = await supabase.auth.resend({
+          type: "signup",
+          email: targetEmail,
+        });
+        if (resendError) {
+          const { error: fallbackErr } = await supabase.auth.signInWithOtp({
+            email: targetEmail,
+          });
+          if (fallbackErr) throw resendError;
+        }
+      }
+
+      toast.success(`A new 6-digit OTP has been sent to ${targetEmail}.`);
+      setResendCooldown(60);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to resend OTP.";
+      setError(message);
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const handleDirectActivate = async (targetEmail: string) => {
+    if (!targetEmail) {
+      setError("Please enter your email address.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      // Send OTP to the email and switch to OTP view for verification
+      const { error: otpErr } = await supabase.auth.signInWithOtp({
+        email: targetEmail,
+      });
+      if (otpErr) throw otpErr;
+
+      setIsLoginOtp(true);
+      setOtp("");
+      setResendCooldown(60);
+      setSuccess(`A 6-digit OTP has been sent to ${targetEmail}. Enter it to verify and log in.`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to send OTP.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-900 via-green-800 to-green-700 px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-950 via-emerald-900 to-emerald-800 px-4 py-8">
       <div className="bg-white/95 backdrop-blur p-8 rounded-2xl w-full max-w-md shadow-2xl">
-        <h2 className="text-2xl font-bold text-gray-800">
-          {isRegister ? "Create Account" : "Welcome Back"}
-        </h2>
-        <p className="text-gray-500 mb-6 text-sm">
-          {isRegister
-            ? "Start your trekking journey today"
-            : "Login to your account"}
-        </p>
+        {isOtpVerification ? (
+          <div>
+            <div className="text-center mb-6">
+              <div className="w-14 h-14 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto mb-3 shadow-xs">
+                <ShieldCheck size={28} />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-800">
+                {isLoginOtp ? "Login OTP Verification" : "Registration OTP Verification"}
+              </h2>
+              <p className="text-gray-500 text-xs mt-1.5 leading-relaxed">
+                {isLoginOtp
+                  ? "Enter the 6-digit OTP sent to your email to complete login:"
+                  : "Enter the 6-digit One-Time Password (OTP) sent to your email:"}
+              </p>
+              <p className="font-bold text-gray-800 text-sm mt-0.5 break-all">
+                {pendingEmail || email}
+              </p>
+            </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-lg mb-4 text-sm">
-            {error}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-2.5 rounded-lg mb-4 text-xs font-medium">
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2.5 rounded-lg mb-4 text-xs font-medium">
+                {success}
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyOtp} className="space-y-5">
+              <div className="flex justify-center my-3">
+                <InputOTP
+                  maxLength={6}
+                  value={otp}
+                  onChange={(val) => {
+                    setOtp(val);
+                    if (error) setError("");
+                  }}
+                >
+                  <InputOTPGroup className="gap-2">
+                    <InputOTPSlot index={0} className="w-11 h-12 text-lg font-bold border-2 rounded-xl text-center bg-white" />
+                    <InputOTPSlot index={1} className="w-11 h-12 text-lg font-bold border-2 rounded-xl text-center bg-white" />
+                    <InputOTPSlot index={2} className="w-11 h-12 text-lg font-bold border-2 rounded-xl text-center bg-white" />
+                    <InputOTPSlot index={3} className="w-11 h-12 text-lg font-bold border-2 rounded-xl text-center bg-white" />
+                    <InputOTPSlot index={4} className="w-11 h-12 text-lg font-bold border-2 rounded-xl text-center bg-white" />
+                    <InputOTPSlot index={5} className="w-11 h-12 text-lg font-bold border-2 rounded-xl text-center bg-white" />
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || otp.length < 6}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 shadow-xs transition disabled:opacity-50 cursor-pointer"
+              >
+                {loading && <Loader2 className="animate-spin" size={18} />}
+                {loading
+                  ? "Verifying OTP..."
+                  : isLoginOtp
+                  ? "Verify OTP & Log In"
+                  : "Verify OTP & Complete Registration"}
+              </button>
+            </form>
+
+            <div className="mt-5 text-center text-xs text-gray-500 space-y-3">
+              <div>
+                Didn't receive the OTP?{" "}
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={resendCooldown > 0 || resending}
+                  className="text-emerald-700 font-bold hover:underline disabled:text-gray-400 disabled:no-underline cursor-pointer"
+                >
+                  {resending ? "Sending..." : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend OTP"}
+                </button>
+              </div>
+
+              <div className="pt-2 border-t border-gray-100">
+                <p className="text-[11px] text-gray-500 mb-2">Wrong email or not receiving?</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOtpVerification(false);
+                    setIsLoginOtp(false);
+                    setOtp("");
+                    setError("");
+                    setSuccess("");
+                  }}
+                  disabled={loading}
+                  className="w-full py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+                >
+                  <ArrowLeft size={15} className="text-emerald-700" />
+                  Back to Login
+                </button>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOtpVerification(false);
+                    setOtp("");
+                    setError("");
+                    setSuccess("");
+                  }}
+                  className="text-gray-500 hover:text-gray-800 transition inline-flex items-center gap-1 font-medium cursor-pointer"
+                >
+                  <ArrowLeft size={14} /> Back
+                </button>
+              </div>
+            </div>
           </div>
-        )}
+        ) : (
+          <>
+            <h2 className="text-2xl font-bold text-gray-800">
+              {isRegister ? "Create Account" : "Welcome Back"}
+            </h2>
+            <p className="text-gray-500 mb-6 text-sm">
+              {isRegister
+                ? "Start your trekking journey today"
+                : "Login to your account"}
+            </p>
 
-        {success && (
-          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-4 text-sm">
-            {success}
-          </div>
-        )}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl mb-4 text-xs font-medium space-y-2.5">
+                <p>{error}</p>
+                {error.toLowerCase().includes("email not confirmed") && (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={async () => {
+                      const targetEmail = (pendingEmail || email).trim();
+                      if (!targetEmail) {
+                        setError("Please enter your email address first.");
+                        return;
+                      }
+                      setLoading(true);
+                      setError("");
+                      try {
+                        const { error: otpErr } = await supabase.auth.signInWithOtp({ email: targetEmail });
+                        if (otpErr) throw otpErr;
+                        setPendingEmail(targetEmail);
+                        setIsOtpVerification(true);
+                        setIsLoginOtp(true);
+                        setOtp("");
+                        setResendCooldown(60);
+                        setSuccess(`A 6-digit OTP has been sent to ${targetEmail}. Please check your inbox or spam folder.`);
+                      } catch (err: unknown) {
+                        const msg = err instanceof Error ? err.message : "Failed to send OTP";
+                        setError(msg);
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
+                  >
+                    {loading ? <Loader2 className="animate-spin" size={14} /> : <Mail size={14} />}
+                    Send 6-digit OTP to Verify & Sign In
+                  </button>
+                )}
+              </div>
+            )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+            {success && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg mb-4 text-sm">
+                {success}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
           {isRegister && (
             <>
               <input
@@ -445,8 +867,8 @@ export default function Login() {
                       )}
 
                       <div className="flex items-center gap-2">
-                        <FileCheck size={14} className="text-green-600" />
-                        <span className="text-[11px] text-green-700 font-semibold">
+                        <FileCheck size={14} className="text-emerald-600" />
+                        <span className="text-[11px] text-emerald-700 font-semibold">
                           {guideIdFile.name} ({(guideIdFile.size / 1024).toFixed(1)} KB) — Ready to upload
                         </span>
                       </div>
@@ -528,7 +950,7 @@ export default function Login() {
 
           {!isRegister && (
             <div className="text-right text-sm">
-              <Link to="/forgot-password" className="text-green-600 hover:underline">
+              <Link to="/forgot-password" className="text-emerald-600 hover:underline">
                 Forgot password?
               </Link>
             </div>
@@ -568,7 +990,7 @@ export default function Login() {
                   e.stopPropagation();
                   setPolicyModalType("terms");
                 }}
-                className="text-green-700 font-bold hover:underline inline"
+                className="text-emerald-700 font-bold hover:underline inline"
               >
                 Terms and Conditions
               </button>
@@ -581,7 +1003,7 @@ export default function Login() {
                   e.stopPropagation();
                   setPolicyModalType("privacy");
                 }}
-                className="text-green-700 font-bold hover:underline inline"
+                className="text-emerald-700 font-bold hover:underline inline"
               >
                 Privacy Policy
               </button>
@@ -593,7 +1015,7 @@ export default function Login() {
             id="submit-btn"
             type="submit"
             disabled={loading}
-            className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 shadow-xs transition"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 shadow-xs transition cursor-pointer"
           >
             {loading && <Loader2 className="animate-spin" size={18} />}
             {loading
@@ -611,8 +1033,14 @@ export default function Login() {
             <>
               Already have an account?{" "}
               <button
-                onClick={() => { setIsRegister(false); removeFile(); setError(""); }}
-                className="text-green-600 font-semibold"
+                onClick={() => {
+                  setIsRegister(false);
+                  setIsOtpVerification(false);
+                  removeFile();
+                  setError("");
+                  setSuccess("");
+                }}
+                className="text-emerald-600 font-semibold cursor-pointer"
               >
                 Login
               </button>
@@ -621,8 +1049,13 @@ export default function Login() {
             <>
               Don't have an account?{" "}
               <button
-                onClick={() => { setIsRegister(true); setError(""); }}
-                className="text-green-600 font-semibold"
+                onClick={() => {
+                  setIsRegister(true);
+                  setIsOtpVerification(false);
+                  setError("");
+                  setSuccess("");
+                }}
+                className="text-emerald-600 font-semibold cursor-pointer"
               >
                 Sign Up
               </button>
@@ -635,7 +1068,9 @@ export default function Login() {
             Back to Home
           </Link>
         </div>
-      </div>
+      </>
+    )}
+  </div>
 
       {/* Terms & Privacy Policy Modal */}
       {policyModalType && (
@@ -694,7 +1129,7 @@ export default function Login() {
               {policyModalType === "terms" ? (
                 <>
                   <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 font-medium">
-                    ⚠️ By registering an account or logging in to TAKAZZ, you enter into a binding agreement to adhere to all Northern Negros Natural Park (NNNP) laws and DENR Administrative Orders.
+                    By registering an account or logging in to TAKAZZ, you enter into a binding agreement to adhere to all Northern Negros Natural Park (NNNP) laws and DENR Administrative Orders.
                   </div>
 
                   <div className="space-y-1">
@@ -735,7 +1170,7 @@ export default function Login() {
               ) : (
                 <>
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 font-medium">
-                    🔒 TAKAZZ and the DENR NNNP Protected Area Management Office are committed to protecting your personal information under the Philippine Data Privacy Act of 2012 (Republic Act No. 10173).
+                    TAKAZZ and the DENR NNNP Protected Area Management Office are committed to protecting your personal information under the Philippine Data Privacy Act of 2012 (Republic Act No. 10173).
                   </div>
 
                   <div className="space-y-1">

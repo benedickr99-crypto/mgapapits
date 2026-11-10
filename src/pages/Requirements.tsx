@@ -61,7 +61,7 @@ export default function Requirements() {
               key={index}
               className="bg-white rounded-2xl shadow-md p-6 flex items-start gap-4"
             >
-              <div className="flex-shrink-0 h-12 w-12 flex items-center justify-center rounded-full bg-green-100 text-green-700">
+              <div className="flex-shrink-0 h-12 w-12 flex items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
                 <req.icon size={20} />
               </div>
               <div>
@@ -89,11 +89,11 @@ export default function Requirements() {
         </div>
 
         {/* NOTE */}
-        <div className="mt-10 p-6 bg-yellow-50 border border-yellow-200 rounded-2xl">
-          <h3 className="font-semibold text-yellow-700">
+        <div className="mt-10 p-6 bg-amber-50 border border-amber-200 rounded-2xl">
+          <h3 className="font-semibold text-amber-800">
             Important Reminder
           </h3>
-          <p className="text-yellow-600 text-sm mt-1">
+          <p className="text-amber-700 text-sm mt-1">
             Incomplete or invalid documents may delay your booking approval.
             Make sure all requirements are prepared before submission.
           </p>
@@ -103,7 +103,7 @@ export default function Requirements() {
         <div className="mt-10 text-center">
           <Link
             to="/booking"
-            className="bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700 transition inline-block"
+            className="bg-emerald-600 text-white px-6 py-3 rounded-xl hover:bg-emerald-700 transition inline-block font-semibold shadow-xs"
           >
             Proceed to Booking
           </Link>

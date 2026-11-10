@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { Link, useSearchParams } from "react-router-dom";
@@ -143,7 +143,7 @@ function MyBookingsSkeleton() {
 export default function MyBookings() {
   const { user, profile } = useAuth();
 
-  // ⚡ SWR CACHING: Read existing bookings from cache immediately for 0ms page load
+  // SWR CACHING: Read existing bookings from cache immediately for 0ms page load
   const [data, setData] = useState<BookingWithTrail[]>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -186,7 +186,7 @@ export default function MyBookings() {
   // Filter state
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const loadBookings = async (showRefreshing = false) => {
+  const loadBookings = useCallback(async (showRefreshing = false) => {
     if (!user) {
       setLoading(false);
       return;
@@ -227,7 +227,7 @@ export default function MyBookings() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -245,7 +245,8 @@ export default function MyBookings() {
       const t = setTimeout(() => setLoading(false), 800);
       return () => clearTimeout(t);
     }
-  }, [user?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, loadBookings]);
 
   const handleCancelBooking = async (bookingId: string) => {
     setCancellingId(bookingId);

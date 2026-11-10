@@ -12,7 +12,8 @@ import {
   Loader2,
   Send,
   MessageSquare,
-  AlertCircle
+  AlertCircle,
+  X
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -215,7 +216,7 @@ export default function AdminIncidents() {
                 : inc.severity === "high"
                 ? "bg-amber-100 text-amber-800 border-amber-300"
                 : inc.severity === "medium"
-                ? "bg-yellow-50 text-yellow-800 border-yellow-200"
+                ? "bg-amber-50 text-amber-800 border-amber-200"
                 : "bg-blue-50 text-blue-800 border-blue-200";
 
             const statusBadge =
@@ -357,8 +358,8 @@ export default function AdminIncidents() {
                 <h3 className="text-base font-bold text-gray-900">Incident Resolution Notes</h3>
                 <p className="text-xs text-gray-500">{selectedIncident.trail_name}</p>
               </div>
-              <button onClick={() => setSelectedIncident(null)} className="text-gray-400 hover:text-gray-600 font-bold">
-                ✕
+              <button onClick={() => setSelectedIncident(null)} className="text-gray-400 hover:text-gray-600 transition" aria-label="Close">
+                <X size={18} />
               </button>
             </div>
 

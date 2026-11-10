@@ -52,7 +52,7 @@ export const BookingVoucherModal = ({ isOpen, onClose, booking }: BookingVoucher
           </div>
 
           {/* Reference Card */}
-          <div className="bg-gradient-to-r from-emerald-800 to-green-900 text-white p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md">
+          <div className="bg-gradient-to-r from-emerald-800 to-emerald-900 text-white p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md">
             <div>
               <span className="text-xs text-emerald-200 uppercase tracking-wider font-semibold">
                 Booking Reference No.

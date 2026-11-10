@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export const isAdmin = async () => {
-  // 🔐 Get current user
+  // Get current user
   const {
     data: { user },
     error: userError,
@@ -12,7 +12,7 @@ export const isAdmin = async () => {
     return false;
   }
 
-  // 🔍 Check role in database
+  // Check role in database
   const { data, error } = await supabase
     .from("profiles")
     .select("role")

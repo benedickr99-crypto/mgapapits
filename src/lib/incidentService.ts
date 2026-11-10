@@ -125,19 +125,19 @@ export async function createIncidentReport(report: {
         .maybeSingle();
 
       if (adminProfile?.id) {
-        const severityEmoji =
+        const severityPrefix =
           report.severity === "critical"
-            ? "🚨 [CRITICAL EMERGENCY]"
+            ? "[CRITICAL EMERGENCY]"
             : report.severity === "high"
-            ? "⚠️ [HIGH SEVERITY]"
-            : "📢 [INCIDENT REPORT]";
+            ? "[HIGH SEVERITY]"
+            : "[INCIDENT REPORT]";
 
         const { error: insErr } = await supabase.from("notifications").insert({
           user_id: adminProfile.id,
-          title: `${severityEmoji} Trail Incident Reported`,
+          title: `${severityPrefix} Trail Incident Reported`,
           message: `Guide ${report.guide_name || "Assigned Guide"} reported: "${report.category.toUpperCase()}" at ${
             report.trail_name || "Trail"
-          }. ${report.requires_assistance ? "⚠️ IMMEDIATE ASSISTANCE REQUESTED!" : ""}`,
+          }. ${report.requires_assistance ? "IMMEDIATE ASSISTANCE REQUESTED!" : ""}`,
           type: "incident_alert",
           link: "/admin",
         });
@@ -145,10 +145,10 @@ export async function createIncidentReport(report: {
         if (insErr) {
           await supabase.from("notifications").insert({
             user_id: adminProfile.id,
-            title: `${severityEmoji} Trail Incident Reported`,
+            title: `${severityPrefix} Trail Incident Reported`,
             message: `Guide ${report.guide_name || "Assigned Guide"} reported: "${report.category.toUpperCase()}" at ${
               report.trail_name || "Trail"
-            }. ${report.requires_assistance ? "⚠️ IMMEDIATE ASSISTANCE REQUESTED!" : ""}`,
+            }. ${report.requires_assistance ? "IMMEDIATE ASSISTANCE REQUESTED!" : ""}`,
             type: "booking_created",
             link: "/admin",
           });

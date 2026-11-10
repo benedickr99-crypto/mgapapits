@@ -325,7 +325,7 @@ function ReviewModal({
                   className="flex-2 flex items-center justify-center gap-2 py-2.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow transition disabled:opacity-60"
                 >
                   {submitting ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-                  {submitting ? "Approving..." : "✅ Confirm Approval"}
+                  {submitting ? "Approving..." : "Confirm Approval"}
                 </button>
               </div>
             </div>
@@ -366,7 +366,7 @@ function ReviewModal({
                   className="flex-2 flex items-center justify-center gap-2 py-2.5 px-6 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold shadow transition disabled:opacity-50"
                 >
                   {submitting ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
-                  {submitting ? "Rejecting..." : "❌ Confirm Rejection"}
+                  {submitting ? "Rejecting..." : "Confirm Rejection"}
                 </button>
               </div>
             </div>
@@ -408,8 +408,8 @@ export default function AdminGuides() {
     active: true,
   });
 
-  const fetchGuides = async () => {
-    setLoading(true);
+  const fetchGuides = async (isInitial = false) => {
+    if (isInitial) setLoading(true);
     try {
       const { data: allProfiles, error } = await supabase
         .from("profiles")
@@ -459,7 +459,7 @@ export default function AdminGuides() {
   };
 
   useEffect(() => {
-    fetchGuides();
+    fetchGuides(true);
 
     // 1. Real-time subscription listening to all changes on profiles table
     const channel = supabase
@@ -480,7 +480,7 @@ export default function AdminGuides() {
               (rec.role === "guide" && rec.is_available === false && rec.guide_application_status !== "approved"))
           ) {
             setNewApplicantAlert(true);
-            toast("📋 New Tour Guide Application Submitted!", {
+            toast("New Tour Guide Application Submitted!", {
               description: `${rec.full_name || "A new applicant"} submitted credentials for Tour Guide review.`,
             });
           }
@@ -549,7 +549,7 @@ export default function AdminGuides() {
       try {
         const { error: notifErr } = await supabase.from("notifications").insert({
           user_id: applicant.id,
-          title: "🎉 Tour Guide Application APPROVED!",
+          title: "Tour Guide Application APPROVED!",
           message,
           type: "guide_approval",
           link: "/guide-dashboard",
@@ -557,7 +557,7 @@ export default function AdminGuides() {
         if (notifErr) {
           await supabase.from("notifications").insert({
             user_id: applicant.id,
-            title: "🎉 Tour Guide Application APPROVED!",
+            title: "Tour Guide Application APPROVED!",
             message,
             type: "booking_approved",
             link: "/guide-dashboard",
@@ -567,7 +567,7 @@ export default function AdminGuides() {
         console.warn("Tour guide approval notification skipped:", e);
       }
 
-      toast.success(`✅ ${applicant.full_name || "Applicant"} is now an Accredited Tour Guide!`);
+      toast.success(`${applicant.full_name || "Applicant"} is now an Accredited Tour Guide!`);
       fetchGuides();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to approve applicant";
@@ -660,7 +660,7 @@ export default function AdminGuides() {
         try {
           const { error: notifErr } = await supabase.from("notifications").insert({
             user_id: selectedUserId,
-            title: "🎉 Promoted to Accredited Tour Guide!",
+            title: "Promoted to Accredited Tour Guide!",
             message: "The Park Administrator has approved your accreditation as an Official NNNP Tour Guide.",
             type: "guide_approval",
             link: "/guide-dashboard",
@@ -668,7 +668,7 @@ export default function AdminGuides() {
           if (notifErr) {
             await supabase.from("notifications").insert({
               user_id: selectedUserId,
-              title: "🎉 Promoted to Accredited Tour Guide!",
+              title: "Promoted to Accredited Tour Guide!",
               message: "The Park Administrator has approved your accreditation as an Official NNNP Tour Guide.",
               type: "booking_approved",
               link: "/guide-dashboard",
@@ -853,13 +853,13 @@ export default function AdminGuides() {
         </div>
       ) : (
         /* Empty state for pending */
-        <div className="bg-green-50 border-2 border-green-200 rounded-3xl p-6 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-green-200 flex items-center justify-center flex-shrink-0">
-            <CheckCircle size={24} className="text-green-700" />
+        <div className="bg-emerald-50 border-2 border-emerald-200 rounded-3xl p-6 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-200 flex items-center justify-center flex-shrink-0">
+            <CheckCircle size={24} className="text-emerald-700" />
           </div>
           <div>
-            <h3 className="text-sm font-black text-green-800">No Pending Applications</h3>
-            <p className="text-xs text-green-600 mt-0.5">
+            <h3 className="text-sm font-black text-emerald-800">No Pending Applications</h3>
+            <p className="text-xs text-emerald-600 mt-0.5">
               All guide applications have been reviewed. New applications will appear here automatically.
             </p>
           </div>

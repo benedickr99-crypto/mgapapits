@@ -112,7 +112,7 @@ export default function SiteHeader() {
           <Link
             to="/"
             onClick={() => setMobile(false)}
-            className="flex items-center gap-2 text-lg sm:text-xl font-bold tracking-tight text-green-700 hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2 text-lg sm:text-xl font-bold tracking-tight text-emerald-700 hover:opacity-90 transition-opacity"
           >
             <img
               src="/takazz-logo.png"
@@ -132,7 +132,7 @@ export default function SiteHeader() {
                 key={link.path}
                 to={link.path}
                 className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${active
-                    ? "bg-green-600 text-white shadow-xs"
+                    ? "bg-emerald-600 text-white shadow-xs"
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-100/80"
                   }`}
               >
@@ -155,7 +155,7 @@ export default function SiteHeader() {
                   onClick={() => setOpen(!open)}
                   className="flex items-center gap-2 bg-white/90 backdrop-blur px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-full shadow-xs border border-gray-200/70 hover:shadow-md transition cursor-pointer"
                 >
-                  <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-green-600 text-white flex items-center justify-center text-xs sm:text-sm font-bold shadow-xs">
+                  <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs sm:text-sm font-bold shadow-xs">
                     {initials}
                   </div>
 
@@ -166,7 +166,7 @@ export default function SiteHeader() {
                     {role && (
                       <span className={`text-[10px] mt-1 font-semibold px-1.5 py-0.5 rounded w-max leading-none ${isAdmin ? 'bg-red-100 text-red-700' :
                           isGuide ? 'bg-amber-100 text-amber-700' :
-                            'bg-green-100 text-green-700'
+                            'bg-emerald-100 text-emerald-700'
                         }`}>
                         {isAdmin ? 'Admin' : (isGuide ? 'Tour Guide' : (role === 'user' ? 'User' : 'Trekker'))}
                       </span>
@@ -246,7 +246,7 @@ export default function SiteHeader() {
           ) : (
             <Link
               to="/login"
-              className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-700 shadow-xs transition"
+              className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-emerald-700 shadow-xs transition"
             >
               Login
             </Link>
@@ -270,7 +270,7 @@ export default function SiteHeader() {
                 onClick={() => setMobile(false)}
                 className={`flex items-center px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
                   active
-                    ? "bg-green-600 text-white shadow-xs"
+                    ? "bg-emerald-600 text-white shadow-xs"
                     : "text-gray-700 hover:bg-gray-100"
                 }`}
               >

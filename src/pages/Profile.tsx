@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { Link } from "react-router-dom";
@@ -33,7 +33,7 @@ export default function Profile() {
   });
 
   // Load profile
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!user) {
       setLoading(false);
       return;
@@ -71,11 +71,11 @@ export default function Profile() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     loadData();
-  }, [user]);
+  }, [loadData]);
 
   // Handle input
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -138,7 +138,7 @@ export default function Profile() {
         if (admins && admins.length > 0) {
           const notifications = admins.map((admin) => ({
             user_id: admin.id,
-            title: "📋 New Tour Guide Application",
+            title: "New Tour Guide Application",
             message: `${profile.full_name || "A trekker"} has applied to become an Accredited Tour Guide. Please review under Tour Guides.`,
             type: "guide_application",
             link: "/admin?tab=guides",
@@ -174,7 +174,7 @@ export default function Profile() {
     return (
       <div className="p-10 text-center">
         <p className="text-gray-500 mb-4">Please log in to view your profile.</p>
-        <Link to="/login" className="text-green-600 hover:underline">
+        <Link to="/login" className="text-emerald-600 hover:underline">
           Go to Login
         </Link>
       </div>

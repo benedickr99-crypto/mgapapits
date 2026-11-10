@@ -127,7 +127,7 @@ export default function Announcements() {
         )}
 
         {/* Ready to Book Banner */}
-        <div className="bg-gradient-to-r from-emerald-800 to-green-900 text-white rounded-3xl p-8 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-6">
+        <div className="bg-gradient-to-r from-emerald-800 to-emerald-900 text-white rounded-3xl p-8 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-6">
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Protected Area Trekking</span>
             <h3 className="text-2xl font-black text-white mt-1">Ready for your NNNP Adventure?</h3>

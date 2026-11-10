@@ -43,7 +43,7 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // ⚡ INSTANT BOOT: Initialize from local cache if available so UI doesn't block
+  // INSTANT BOOT: Initialize from local cache if available so UI doesn't block
   const [session, setSession] = useState<Session | null>(() => {
     if (typeof window === "undefined") return null;
     try {
@@ -74,11 +74,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   });
 
-  // If we already have a cached user, we can set loading to false immediately!
+  // If we already have a cached user AND profile, we can set loading to false immediately!
   const [loading, setLoading] = useState<boolean>(() => {
     if (typeof window === "undefined") return true;
     try {
-      return !localStorage.getItem("nnnp_auth_user");
+      const cachedUser = localStorage.getItem("nnnp_auth_user");
+      const cachedProfile = localStorage.getItem("nnnp_auth_profile");
+      return !cachedUser || !cachedProfile;
     } catch {
       return true;
     }

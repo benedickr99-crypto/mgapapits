@@ -47,7 +47,7 @@ export function useNotifications() {
       setNotifications(data as Notification[]);
       setUnreadCount(data.filter((n) => !n.read).length);
     }
-  }, [user?.id]);
+  }, [user]);
 
   useEffect(() => {
     fetchNotifications();
@@ -75,8 +75,6 @@ export function useNotifications() {
           // Show a beautiful toast popup
           toast(newNotification.title, {
             description: newNotification.message,
-            icon: newNotification.type === 'booking_created' ? '🔔' : 
-                  newNotification.type === 'booking_approved' ? '✅' : '❌',
           });
         }
       )

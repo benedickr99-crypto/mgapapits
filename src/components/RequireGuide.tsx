@@ -6,9 +6,9 @@ export default function RequireGuide({
 }: {
   children: JSX.Element;
 }) {
-  const { user, loading, isGuide } = useAuth();
+  const { user, profile, loading, isGuide } = useAuth();
 
-  if (loading) {
+  if (loading || (user && !profile)) {
     return (
       <div className="flex items-center justify-center h-screen text-gray-500 font-medium">
         Loading guide panel...

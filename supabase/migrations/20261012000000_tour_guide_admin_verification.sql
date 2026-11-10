@@ -143,7 +143,7 @@ BEGIN
     INSERT INTO public.notifications (user_id, title, message, type, link, entity_id)
     SELECT 
       id,
-      '📋 New Tour Guide Application',
+      'New Tour Guide Application',
       COALESCE(NEW.full_name, 'A new applicant') || ' has submitted credentials for Tour Guide accreditation and is waiting for your review.',
       'guide_application',
       '/admin?tab=guides',

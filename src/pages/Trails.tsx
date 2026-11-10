@@ -13,7 +13,7 @@ type Trail = Tables<"trails">;
 
 
 const Trails = () => {
-  // ⚡ INSTANT LOAD from cache
+  // INSTANT LOAD from cache
   const [trails, setTrails] = useState<Trail[]>(() => {
     return getCached<Trail[]>("nnnp_trails") || [];
   });
@@ -25,8 +25,8 @@ const Trails = () => {
   useEffect(() => {
     const fetchTrails = async () => {
       const cached = getCached<Trail[]>("nnnp_trails");
-      if (cached && cached.length > 0 && trails.length === 0) {
-        setTrails(cached);
+      if (cached && cached.length > 0) {
+        setTrails((prev) => (prev.length === 0 ? cached : prev));
         setLoading(false);
       }
 
@@ -54,7 +54,7 @@ const Trails = () => {
   return (
     <div ref={scrollRef} className="bg-gray-50 min-h-screen">
       {/* HEADER */}
-      <section className="bg-gradient-to-r from-green-800 to-green-700 text-white py-16">
+      <section className="bg-gradient-to-r from-emerald-800 to-emerald-700 text-white py-16">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center gap-2 text-sm bg-white/10 px-3 py-1 rounded-full w-fit">
             <MapPin size={14} /> Northern Negros Natural Park
@@ -130,7 +130,7 @@ const Trails = () => {
                   {/* BUTTON */}
                   <Link
                     to={`/booking?trailId=${trail.id}`}
-                    className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-green-700 hover:underline"
+                    className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
                   >
                     Book this trail <ArrowRight size={14} />
                   </Link>

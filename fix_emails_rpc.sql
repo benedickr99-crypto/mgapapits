@@ -380,3 +380,69 @@ GRANT EXECUTE ON FUNCTION public.delete_user_account(UUID) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
 
+-- ------------------------------------------------------------------------------
+-- 15. Promote specific account to Admin
+-- Run this to make benedickluiser@gmail.com an admin
+-- ------------------------------------------------------------------------------
+UPDATE public.profiles
+SET role = 'admin'
+WHERE id = (
+  SELECT id FROM auth.users WHERE email = 'benedickluiser@gmail.com'
+);
+
+-- Verify the change
+SELECT id, full_name, email, role
+FROM public.get_profiles_with_email()
+WHERE email = 'benedickluiser@gmail.com';
+
+-- ------------------------------------------------------------------------------
+-- 16. RPC to Confirm User Email & Auto-Confirm Trigger
+-- Resolves "Email not confirmed" and ensures OTP / Instant activation works.
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.confirm_user_email(p_email TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+DECLARE
+  v_rows_affected INT;
+BEGIN
+  UPDATE auth.users
+  SET email_confirmed_at = COALESCE(email_confirmed_at, now())
+  WHERE lower(trim(email)) = lower(trim(p_email));
+
+  GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
+  RETURN v_rows_affected > 0;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.confirm_user_email(TEXT) TO anon, authenticated;
+
+-- Confirm all existing unconfirmed users (e.g. a04945518@gmail.com)
+UPDATE auth.users
+SET email_confirmed_at = now()
+WHERE email_confirmed_at IS NULL;
+
+-- Auto-confirm trigger for newly registered users
+CREATE OR REPLACE FUNCTION public.handle_auto_confirm_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  IF NEW.email_confirmed_at IS NULL THEN
+    NEW.email_confirmed_at = now();
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS tr_auto_confirm_user ON auth.users;
+CREATE TRIGGER tr_auto_confirm_user
+  BEFORE INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_auto_confirm_user();
+
+NOTIFY pgrst, 'reload schema';
+

@@ -4,7 +4,7 @@ import { Routes, Route, useLocation } from "react-router-dom";
 import Home from "./pages/Home";
 import Login from "./pages/login";
 
-// ⚡ ROUTE CODE-SPLITTING: Heavy pages loaded on demand
+// ROUTE CODE-SPLITTING: Heavy pages loaded on demand
 const Booking = lazy(() => import("./pages/Book"));
 const MyBookings = lazy(() => import("./pages/MyBookings"));
 const Admin = lazy(() => import("./pages/Admin"));
@@ -42,10 +42,10 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
 
-      {/* 🔝 NAVBAR (Hidden on dedicated Admin console) */}
+      {/* NAVBAR (Hidden on dedicated Admin console) */}
       {!isAdminRoute && <SiteHeader />}
 
-      {/* 📄 MAIN CONTENT */}
+      {/* MAIN CONTENT */}
       <main className="flex-1">
         <ErrorBoundary>
           <Suspense fallback={<PageFallback />}>
@@ -61,7 +61,7 @@ export default function App() {
               <Route path="/process" element={<Process />} />
               <Route path="/faq" element={<FAQ />} />
 
-              {/* 🔐 PROTECTED USER ROUTES */}
+              {/* PROTECTED USER ROUTES */}
               <Route
                 path="/booking"
                 element={
@@ -89,7 +89,7 @@ export default function App() {
                 }
               />
 
-              {/* 🛠 ADMIN ROUTE */}
+              {/* ADMIN ROUTE */}
               <Route
                 path="/admin"
                 element={
@@ -99,7 +99,7 @@ export default function App() {
                 }
               />
 
-              {/* 🧭 GUIDE ROUTES (Both /guide and /guide-dashboard) */}
+              {/* GUIDE ROUTES (Both /guide and /guide-dashboard) */}
               <Route
                 path="/guide"
                 element={
@@ -117,7 +117,7 @@ export default function App() {
                 }
               />
 
-              {/* ❌ 404 */}
+              {/* 404 */}
               <Route path="*" element={<NotFound />} />
 
             </Routes>
@@ -125,10 +125,10 @@ export default function App() {
         </ErrorBoundary>
       </main>
 
-      {/* 🔻 FOOTER (Hidden on dedicated Admin console) */}
+      {/* FOOTER (Hidden on dedicated Admin console) */}
       {!isAdminRoute && <SiteFooter />}
 
-      {/* 🔔 TOASTS */}
+      {/* TOASTS */}
       <Toaster position="top-center" richColors />
     </div>
   );
