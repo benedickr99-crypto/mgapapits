@@ -463,7 +463,7 @@ export default function AdminGuides() {
 
     // 1. Real-time subscription listening to all changes on profiles table
     const channel = supabase
-      .channel("admin_guide_applicants_channel")
+      .channel(`admin-guide-applicants-${Date.now()}`)
       .on(
         "postgres_changes",
         {

@@ -424,7 +424,7 @@ export default function Admin() {
 
     // Realtime listener for incoming bookings & updates
     const channel = supabase
-      .channel("admin-realtime-sync")
+      .channel(`admin-realtime-sync-${Date.now()}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "bookings" },
