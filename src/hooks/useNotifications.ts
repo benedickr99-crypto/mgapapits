@@ -47,7 +47,7 @@ export function useNotifications() {
       setNotifications(data as Notification[]);
       setUnreadCount(data.filter((n) => !n.read).length);
     }
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     fetchNotifications();
@@ -56,7 +56,7 @@ export function useNotifications() {
 
     // Real-time subscription to notifications targeting this specific user
     const channel = supabase
-      .channel(`notifications_${user.id}_${Date.now()}`)
+      .channel(`notifications_${user.id}`)
       .on(
         "postgres_changes",
         {
@@ -75,6 +75,8 @@ export function useNotifications() {
           // Show a beautiful toast popup
           toast(newNotification.title, {
             description: newNotification.message,
+            icon: newNotification.type === 'booking_created' ? '🔔' : 
+                  newNotification.type === 'booking_approved' ? '✅' : '✅',
           });
         }
       )
