@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Fragment } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { Link, useSearchParams } from "react-router-dom";
@@ -23,7 +23,8 @@ import {
 import {
   FileText, Download, Eye, AlertCircle, CheckCircle2,
   Calendar, Users, Phone, Info, MapPin, Printer, Star,
-  Compass, ExternalLink, Filter, XCircle, Clock, RefreshCw, Building2, ShieldCheck, Trash2
+  Compass, ExternalLink, Filter, XCircle, Clock, RefreshCw, Building2, ShieldCheck, Trash2,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
 import { BookingVoucherModal } from "@/components/BookingVoucherModal";
 import { ReviewModal } from "@/components/ReviewModal";
@@ -186,6 +187,10 @@ export default function MyBookings() {
 
   // Filter state
   const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  // Pagination / Page Limiter state
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(5);
 
   const loadBookings = useCallback(async (showRefreshing = false) => {
     if (!user) {
@@ -366,6 +371,9 @@ export default function MyBookings() {
     return b.status.toLowerCase() === statusFilter.toLowerCase();
   });
 
+  const totalPages = Math.ceil(filteredBookings.length / pageSize) || 1;
+  const paginatedBookings = filteredBookings.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   if (loading && data.length === 0) {
     return <MyBookingsSkeleton />;
   }
@@ -427,7 +435,10 @@ export default function MyBookings() {
         ].map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setStatusFilter(tab.id)}
+            onClick={() => {
+              setStatusFilter(tab.id);
+              setCurrentPage(1);
+            }}
             className={`text-xs font-bold px-3.5 py-1.5 rounded-full transition shrink-0 ${
               statusFilter === tab.id
                 ? "bg-emerald-700 text-white shadow-xs"
@@ -458,7 +469,7 @@ export default function MyBookings() {
         </div>
       ) : (
         <div className="space-y-5">
-          {filteredBookings.map((b) => {
+          {paginatedBookings.map((b) => {
             const isHighlighted = b.id === highlightId;
             const refNum = getBookingReferenceNumber(b);
             const meta = getTrailMetadata(b.trails?.name);
@@ -671,6 +682,90 @@ export default function MyBookings() {
               </div>
             );
           })}
+
+          {/* Page Limiter & Pagination Controls */}
+          {filteredBookings.length > 0 && (
+            <div className="flex flex-col items-center justify-center gap-3 py-6 px-2 text-xs text-gray-600 border-t border-gray-100 mt-6 bg-white rounded-2xl border shadow-xs">
+              <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-gray-600">
+                <span>Show</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  aria-label="Bookings per page"
+                  className="px-2.5 py-0.5 bg-white border-2 border-emerald-500 rounded-full text-xs font-bold text-gray-800 shadow-xs focus:outline-hidden cursor-pointer"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+                <span>bookings per page</span>
+                <span className="text-gray-300 mx-1">|</span>
+                <span>
+                  Showing{" "}
+                  <strong className="text-gray-900 font-bold">
+                    {filteredBookings.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}
+                  </strong>{" "}
+                  to{" "}
+                  <strong className="text-gray-900 font-bold">
+                    {Math.min(currentPage * pageSize, filteredBookings.length)}
+                  </strong>{" "}
+                  of <strong className="text-gray-900 font-bold">{filteredBookings.length}</strong>
+                </span>
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-1 mt-1">
+                  <button
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage <= 1}
+                    className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                    title="Previous page"
+                  >
+                    <ChevronLeft size={15} />
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((page) => {
+                      if (totalPages <= 5) return true;
+                      if (page === 1 || page === totalPages) return true;
+                      return Math.abs(page - currentPage) <= 1;
+                    })
+                    .map((page, idx, arr) => {
+                      const prev = arr[idx - 1];
+                      const hasGap = prev && page - prev > 1;
+                      return (
+                        <Fragment key={page}>
+                          {hasGap && <span className="px-1 text-gray-400">...</span>}
+                          <button
+                            onClick={() => setCurrentPage(page)}
+                            className={`w-7 h-7 rounded-lg text-xs font-bold transition cursor-pointer ${
+                              currentPage === page
+                                ? "bg-emerald-600 text-white shadow-xs"
+                                : "border border-gray-200 text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        </Fragment>
+                      );
+                    })}
+
+                  <button
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage >= totalPages}
+                    className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                    title="Next page"
+                  >
+                    <ChevronRight size={15} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
