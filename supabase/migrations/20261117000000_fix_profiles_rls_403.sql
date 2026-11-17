@@ -3,66 +3,23 @@
 --      users to read their own profile AND allow has_role() to work without recursion.
 -- ==============================================================================
 
--- 1. Ensure the `role` column exists (TEXT, not the old enum which breaks has_role lookups)
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'trekker';
+-- 1. Ensure 'guide' and 'user' exist in app_role enum
+ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'guide';
+ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'user';
 
--- 2. Drop ALL existing SELECT policies on profiles to avoid conflicts
+-- 2. Drop ALL existing SELECT/ALL policies on profiles to avoid conflicts and recursion
 DO $$ BEGIN
-  DROP POLICY IF EXISTS "Users view own profile"           ON public.profiles;
-  DROP POLICY IF EXISTS "Admins view all profiles"         ON public.profiles;
-  DROP POLICY IF EXISTS "Anyone view guide profiles"       ON public.profiles;
+  DROP POLICY IF EXISTS "Users view own profile"                ON public.profiles;
+  DROP POLICY IF EXISTS "Admins view all profiles"              ON public.profiles;
+  DROP POLICY IF EXISTS "Anyone view guide profiles"            ON public.profiles;
   DROP POLICY IF EXISTS "Anyone view admin profile for contact" ON public.profiles;
-  DROP POLICY IF EXISTS "Admins manage profiles"           ON public.profiles;
-  DROP POLICY IF EXISTS "Users update own profile"         ON public.profiles;
+  DROP POLICY IF EXISTS "Admins manage profiles"                ON public.profiles;
+  DROP POLICY IF EXISTS "Users update own profile"              ON public.profiles;
+  DROP POLICY IF EXISTS "Users insert own profile"              ON public.profiles;
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
 
--- 3. Recreate clean, non-recursive RLS policies
--- Users can always read their own profile row (required for auth to work)
-CREATE POLICY "Users view own profile"
-  ON public.profiles FOR SELECT
-  USING (auth.uid() = id);
-
--- Authenticated users can read guide profiles (for guide listing pages)
-CREATE POLICY "Anyone view guide profiles"
-  ON public.profiles FOR SELECT
-  USING (role = 'guide');
-
--- Admins can view all profiles (uses a direct column check to avoid recursion)
-CREATE POLICY "Admins view all profiles"
-  ON public.profiles FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p2
-      WHERE p2.id = auth.uid()
-        AND p2.role = 'admin'
-    )
-  );
-
--- Users can update their own profile
-CREATE POLICY "Users update own profile"
-  ON public.profiles FOR UPDATE
-  USING (auth.uid() = id);
-
--- Admins can do anything with profiles
-CREATE POLICY "Admins manage profiles"
-  ON public.profiles FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p2
-      WHERE p2.id = auth.uid()
-        AND p2.role = 'admin'
-    )
-  )
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.profiles p2
-      WHERE p2.id = auth.uid()
-        AND p2.role = 'admin'
-    )
-  );
-
--- 4. Fix has_role() to be non-recursive (uses direct column check on profiles, not self-reference)
+-- 3. Fix has_role() to compare app_role with app_role (no cast mismatch)
 CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role app_role)
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -74,21 +31,61 @@ AS $$
     SELECT 1
     FROM public.profiles
     WHERE id = _user_id
-      AND role = _role::TEXT
-  )
+      AND role = _role
+  );
 $$;
 
--- 5. Ensure INSERT policy exists so new signups can create their profile
-DO $$ BEGIN
-  DROP POLICY IF EXISTS "Users insert own profile" ON public.profiles;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
+-- 4. Recreate clean, non-recursive RLS policies on public.profiles
+-- Users can always view their own profile
+CREATE POLICY "Users view own profile"
+  ON public.profiles FOR SELECT
+  USING (auth.uid() = id);
 
+-- Anyone can view guide profiles (needed for booking and guide listings)
+CREATE POLICY "Anyone view guide profiles"
+  ON public.profiles FOR SELECT
+  USING (role = 'guide'::public.app_role);
+
+-- Admins can view all profiles
+CREATE POLICY "Admins view all profiles"
+  ON public.profiles FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles p2
+      WHERE p2.id = auth.uid()
+        AND p2.role = 'admin'::public.app_role
+    )
+  );
+
+-- Users can update their own profile
+CREATE POLICY "Users update own profile"
+  ON public.profiles FOR UPDATE
+  USING (auth.uid() = id);
+
+-- Admins can manage all profiles
+CREATE POLICY "Admins manage profiles"
+  ON public.profiles FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles p2
+      WHERE p2.id = auth.uid()
+        AND p2.role = 'admin'::public.app_role
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles p2
+      WHERE p2.id = auth.uid()
+        AND p2.role = 'admin'::public.app_role
+    )
+  );
+
+-- Users can insert their own profile on signup
 CREATE POLICY "Users insert own profile"
   ON public.profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
 
--- 6. Grant table-level permissions
+-- 5. Grant table-level permissions
 GRANT SELECT, INSERT, UPDATE ON public.profiles TO authenticated;
 GRANT SELECT ON public.profiles TO anon;
 
