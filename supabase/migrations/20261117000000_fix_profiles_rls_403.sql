@@ -1,25 +1,26 @@
 -- ==============================================================================
--- FIX: 403 on /rest/v1/profiles — Ensure RLS policies allow authenticated
---      users to read their own profile AND allow has_role() to work without recursion.
+-- FIX: Infinite recursion on relation "profiles" (HTTP 500 error)
 -- ==============================================================================
 
--- 1. Ensure 'guide' and 'user' exist in app_role enum
+-- 1. Ensure enum has all values
 ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'guide';
 ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'user';
 
--- 2. Drop ALL existing SELECT/ALL policies on profiles to avoid conflicts and recursion
-DO $$ BEGIN
-  DROP POLICY IF EXISTS "Users view own profile"                ON public.profiles;
-  DROP POLICY IF EXISTS "Admins view all profiles"              ON public.profiles;
-  DROP POLICY IF EXISTS "Anyone view guide profiles"            ON public.profiles;
-  DROP POLICY IF EXISTS "Anyone view admin profile for contact" ON public.profiles;
-  DROP POLICY IF EXISTS "Admins manage profiles"                ON public.profiles;
-  DROP POLICY IF EXISTS "Users update own profile"              ON public.profiles;
-  DROP POLICY IF EXISTS "Users insert own profile"              ON public.profiles;
-EXCEPTION WHEN OTHERS THEN NULL;
+-- 2. Drop ALL existing policies on profiles
+DO $$ 
+DECLARE
+  pol RECORD;
+BEGIN
+  FOR pol IN 
+    SELECT policyname 
+    FROM pg_policies 
+    WHERE schemaname = 'public' AND tablename = 'profiles'
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.profiles', pol.policyname);
+  END LOOP;
 END $$;
 
--- 3. Fix has_role() to compare app_role with app_role (no cast mismatch)
+-- 3. Replace has_role() with a pure SECURITY DEFINER function that bypasses RLS
 CREATE OR REPLACE FUNCTION public.has_role(_user_id UUID, _role app_role)
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -35,58 +36,40 @@ AS $$
   );
 $$;
 
--- 4. Recreate clean, non-recursive RLS policies on public.profiles
--- Users can always view their own profile
+-- 4. Create simple, NON-RECURSIVE policies for profiles
+-- Policy 1: Users can ALWAYS SELECT their own profile
 CREATE POLICY "Users view own profile"
   ON public.profiles FOR SELECT
   USING (auth.uid() = id);
 
--- Anyone can view guide profiles (needed for booking and guide listings)
+-- Policy 2: Anyone can view guide profiles
 CREATE POLICY "Anyone view guide profiles"
   ON public.profiles FOR SELECT
   USING (role = 'guide'::public.app_role);
 
--- Admins can view all profiles
+-- Policy 3: Admins can view all profiles (using has_role which is SECURITY DEFINER)
 CREATE POLICY "Admins view all profiles"
   ON public.profiles FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p2
-      WHERE p2.id = auth.uid()
-        AND p2.role = 'admin'::public.app_role
-    )
-  );
+  USING (public.has_role(auth.uid(), 'admin'::public.app_role));
 
--- Users can update their own profile
+-- Policy 4: Users update their own profile
 CREATE POLICY "Users update own profile"
   ON public.profiles FOR UPDATE
   USING (auth.uid() = id);
 
--- Admins can manage all profiles
+-- Policy 5: Admins manage all profiles (using has_role)
 CREATE POLICY "Admins manage profiles"
   ON public.profiles FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p2
-      WHERE p2.id = auth.uid()
-        AND p2.role = 'admin'::public.app_role
-    )
-  )
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.profiles p2
-      WHERE p2.id = auth.uid()
-        AND p2.role = 'admin'::public.app_role
-    )
-  );
+  USING (public.has_role(auth.uid(), 'admin'::public.app_role))
+  WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role));
 
--- Users can insert their own profile on signup
+-- Policy 6: Users insert their own profile on signup
 CREATE POLICY "Users insert own profile"
   ON public.profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
 
--- 5. Grant table-level permissions
-GRANT SELECT, INSERT, UPDATE ON public.profiles TO authenticated;
+-- 5. Permissions
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles TO authenticated;
 GRANT SELECT ON public.profiles TO anon;
 
 NOTIFY pgrst, 'reload schema';
