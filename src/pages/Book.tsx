@@ -955,7 +955,7 @@ export default function Book() {
       // Find current participant name
       const currentParticipantName = participants[idx]?.fullName?.trim() || "";
       const matchCheck = checkIdNameMatch(
-        currentParticipantName || result.detectedName || "",
+        currentParticipantName,
         result.detectedName,
         result.rawText
       );
@@ -2202,7 +2202,9 @@ export default function Book() {
                                     {validIdMatchStatus?.isMatch ? "ID Verified & Matched: " : "ID Name Mismatch: "}
                                   </span>
                                   <span className="font-semibold">
-                                    {ocrState.detectedName || "Valid ID"}
+                                    {validIdMatchStatus?.isMatch
+                                      ? (validIdMatchStatus.matchedName || p.fullName)
+                                      : (ocrState.detectedName ? `ID shows "${ocrState.detectedName}"` : "Name on ID does not match")}
                                   </span>
                                   {ocrState.detectedIdType && (
                                     <span className={validIdMatchStatus?.isMatch ? "text-slate-600 font-medium" : "text-red-700/80 font-medium"}>
@@ -2216,7 +2218,7 @@ export default function Book() {
                                   )}
                                   {!validIdMatchStatus?.isMatch && (
                                     <span className="text-red-700 font-semibold block sm:inline sm:ml-1">
-                                      • The ID must be visible, legible, and match "{p.fullName}".
+                                      • Expected: "{p.fullName}". ID must be clear and match this participant.
                                     </span>
                                   )}
                                 </div>
@@ -2268,7 +2270,7 @@ export default function Book() {
                                   ? undefined
                                   : validIdMatchStatus.isMatch
                                     ? "Name Matches ID"
-                                    : "ID Mismatch • Must Be Visible"
+                                    : "ID Mismatch • Must Match Name"
                               }
                               accept=".pdf,.jpg,.jpeg,.png"
                             />
@@ -2625,7 +2627,7 @@ export default function Book() {
               const idx = ocrModal.participantIdx;
               const pName = participants[idx]?.fullName || "";
               const matchCheck = checkIdNameMatch(
-                pName || data.detectedName || "",
+                pName,
                 data.detectedName,
                 data.rawText
               );

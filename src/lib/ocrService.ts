@@ -11,6 +11,12 @@ export interface OcrExtractedData {
   detectedIdNumber?: string;
 }
 
+export interface NameMatchResult {
+  isMatch: boolean;
+  reason: string;
+  matchedName?: string;
+}
+
 // Clean common noise words from government IDs
 const NOISE_WORDS = new Set([
   "REPUBLIC", "PHILIPPINES", "PILIPINAS", "REPUBLIKA", "PAMBANSANG", "PAGKAKAKILANLAN",
@@ -18,8 +24,63 @@ const NOISE_WORDS = new Set([
   "DRIVER", "LICENSE", "COMMISSION", "ELECTIONS", "PASSPORT", "SOCIAL", "SECURITY",
   "SYSTEM", "UNIFIED", "MULTI-PURPOSE", "POSTAL", "ID", "SIGNATURE", "SEX", "DATE",
   "BIRTH", "NATIONALITY", "FILIPINO", "ADDRESS", "BLOOD", "TYPE", "WEIGHT", "HEIGHT",
-  "RESTRICTIONS", "CONDITIONS", "EXPIRATION", "AGENCY", "GOVERNMENT", "OFFICIAL", "VALID"
+  "RESTRICTIONS", "CONDITIONS", "EXPIRATION", "AGENCY", "GOVERNMENT", "OFFICIAL", "VALID",
+  "BARANGAY", "CLEARANCE", "POLICE", "NBI", "TAX", "TIN", "VOTER", "VOTERS", "MEMBER",
+  "REGISTERED", "REGISTRATION", "CERTIFICATE", "CERTIFICATION", "AUTHORITY", "HEALTH",
+  "INSURANCE", "PHILHEALTH", "SENIOR", "CITIZEN", "PERSONS", "DISABILITY", "PWD",
+  "STUDENT", "COLLEGE", "UNIVERSITY", "SCHOOL", "TREKKING", "WAIVER", "LIABILITY",
+  "PERMIT", "TOURISM", "PARK", "PROTECTED", "AREA", "MANAGEMENT", "BOARD", "PAMB", "DENR"
 ]);
+
+/**
+ * Checks whether a single word looks like a legitimate person name component
+ */
+function isValidNameWord(w: string): boolean {
+  if (w.length < 2) return false;
+  if (!/^[a-zA-Z]+$/.test(w)) return false;
+  // Must contain at least one vowel
+  if (!/[aeiouyAEIOUY]/.test(w)) return false;
+  // Must not be an administrative noise word
+  if (NOISE_WORDS.has(w.toUpperCase())) return false;
+  return true;
+}
+
+/**
+ * Validates if a string is a credible full name
+ */
+function isValidFullNameCandidate(str: string): boolean {
+  if (!str) return false;
+  const cleaned = str.replace(/[^A-Za-z\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (cleaned.length < 5 || cleaned.length > 40) return false;
+
+  const words = cleaned.split(/\s+/);
+  if (words.length < 2 || words.length > 4) return false;
+
+  // Every word must be a valid name word
+  if (!words.every(isValidNameWord)) return false;
+
+  // At least one word must have at least 3 characters
+  if (!words.some((w) => w.length >= 3)) return false;
+
+  const upper = cleaned.toUpperCase();
+  if (
+    upper.includes("REPUBLIC") ||
+    upper.includes("PHILIPPINES") ||
+    upper.includes("DEPARTMENT") ||
+    upper.includes("CERTIFICATE") ||
+    upper.includes("OFFICE") ||
+    upper.includes("COMMISSION") ||
+    upper.includes("REGISTRATION")
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function cleanNameCandidate(raw: string): string {
+  return raw.replace(/[^A-Za-z\s]/g, " ").replace(/\s+/g, " ").trim();
+}
 
 /**
  * Parses raw OCR text to extract name, age/birthdate, gender, and ID type
@@ -62,7 +123,6 @@ export function parseIdDocumentText(rawText: string): Partial<OcrExtractedData> 
   }
 
   // Detect Birth Date & Calculate Age
-  // Matches YYYY/MM/DD, DD/MM/YYYY, YYYY-MM-DD, or Month DD, YYYY
   const datePatterns = [
     /\b(19\d\d|20[0-2]\d)[-/.](0[1-9]|1[0-2])[-/.](0[1-9]|[12]\d|3[01])\b/, // YYYY-MM-DD
     /\b(0[1-9]|[12]\d|3[01])[-/.](0[1-9]|1[0-2])[-/.](19\d\d|20[0-2]\d)\b/, // DD-MM-YYYY
@@ -97,44 +157,69 @@ export function parseIdDocumentText(rawText: string): Partial<OcrExtractedData> 
     }
   }
 
-  // Detect Name
-  // Common label patterns on Philippine IDs:
-  // "Last Name, First Name Middle Name" or "Name: John Doe" or "Given Names: ..."
-  const nameLabelRegex = /(?:NAME|PANGALAN|GIVEN\s*NAME|SURNAME|LAST\s*NAME)[:\s]+([A-Za-z\s,.-]{4,40})/i;
-  const labelMatch = rawText.match(nameLabelRegex);
-  if (labelMatch && labelMatch[1]) {
-    const clean = labelMatch[1].replace(/[,.]/g, " ").replace(/\s+/g, " ").trim();
-    if (clean.length > 3 && !NOISE_WORDS.has(clean.toUpperCase())) {
-      result.detectedName = toTitleCase(clean);
-    }
-  }
+  // Detect Name using common Philippine ID labels
+  let lastNameFound = "";
+  let givenNameFound = "";
 
-  // If label didn't catch it, search for capitalized line with 2-4 words that isn't noise
-  if (!result.detectedName) {
-    for (const line of lines) {
-      const trimmed = line.replace(/[^A-Za-z\s]/g, "").trim();
-      const words = trimmed.split(/\s+/).filter((w) => w.length > 1);
-      if (words.length >= 2 && words.length <= 4) {
-        const isAllNoise = words.every((w) => NOISE_WORDS.has(w.toUpperCase()));
-        if (!isAllNoise && words.every((w) => /^[A-Z][a-z]+$|^[A-Z]+$/.test(w))) {
-          // Exclude lines with common header phrases
-          const upperLine = trimmed.toUpperCase();
-          if (
-            !upperLine.includes("REPUBLIC") &&
-            !upperLine.includes("PHILIPPINES") &&
-            !upperLine.includes("DEPARTMENT") &&
-            !upperLine.includes("CERTIFICATE") &&
-            !upperLine.includes("OFFICE")
-          ) {
-            result.detectedName = toTitleCase(trimmed);
-            break;
-          }
-        }
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Check Last Name / Apelyido
+    const lastNameMatch = line.match(/(?:APELYIDO|LAST\s*NAME|SURNAME|NOM)\s*[:/]?\s*([A-Za-z\s-]{2,30})/i);
+    if (lastNameMatch && lastNameMatch[1].trim().length > 1) {
+      const val = cleanNameCandidate(lastNameMatch[1]);
+      if (val && isValidNameWord(val.split(/\s+/)[0])) {
+        lastNameFound = val;
+      }
+    } else if (/(?:APELYIDO|LAST\s*NAME|SURNAME|NOM)\s*[:/]?$/i.test(line) && lines[i + 1]) {
+      const nextVal = cleanNameCandidate(lines[i + 1]);
+      if (nextVal && isValidNameWord(nextVal.split(/\s+/)[0])) {
+        lastNameFound = nextVal;
+      }
+    }
+
+    // Check Given Name / Mga Pangalan
+    const givenNameMatch = line.match(/(?:MGA\s*PANGALAN|GIVEN\s*NAMES?|FIRST\s*NAME|PR[EÉ]NOMS?)\s*[:/]?\s*([A-Za-z\s-]{2,40})/i);
+    if (givenNameMatch && givenNameMatch[1].trim().length > 1) {
+      const val = cleanNameCandidate(givenNameMatch[1]);
+      if (val && isValidNameWord(val.split(/\s+/)[0])) {
+        givenNameFound = val;
+      }
+    } else if (/(?:MGA\s*PANGALAN|GIVEN\s*NAMES?|FIRST\s*NAME)\s*[:/]?$/i.test(line) && lines[i + 1]) {
+      const nextVal = cleanNameCandidate(lines[i + 1]);
+      if (nextVal && isValidNameWord(nextVal.split(/\s+/)[0])) {
+        givenNameFound = nextVal;
+      }
+    }
+
+    // Check Combined "Name: First Last" or "Name: Last, First"
+    const fullNameMatch = line.match(/(?:FULL\s*NAME|NAME|PANGALAN)\s*[:/]?\s*([A-Za-z\s,.-]{4,40})/i);
+    if (fullNameMatch && fullNameMatch[1] && !lastNameFound && !givenNameFound) {
+      const candidate = cleanNameCandidate(fullNameMatch[1]);
+      if (isValidFullNameCandidate(candidate)) {
+        result.detectedName = toTitleCase(candidate);
       }
     }
   }
 
-  // Detect ID / Reference Number (e.g. 1234-5678-9012 or N01-12-345678)
+  if (givenNameFound && lastNameFound) {
+    result.detectedName = toTitleCase(`${givenNameFound} ${lastNameFound}`);
+  } else if (givenNameFound && !result.detectedName) {
+    result.detectedName = toTitleCase(givenNameFound);
+  }
+
+  // If label didn't catch it, search for a line with valid full name characteristics
+  if (!result.detectedName) {
+    for (const line of lines) {
+      const candidate = cleanNameCandidate(line);
+      if (isValidFullNameCandidate(candidate)) {
+        result.detectedName = toTitleCase(candidate);
+        break;
+      }
+    }
+  }
+
+  // Detect ID / Reference Number
   const idNumMatch = rawText.match(/\b([A-Z0-9]{3,4}[-\s]?[A-Z0-9]{3,4}[-\s]?[A-Z0-9]{3,6})\b/);
   if (idNumMatch) {
     result.detectedIdNumber = idNumMatch[1];
@@ -185,27 +270,73 @@ export async function runTesseractOcr(
   }
 }
 
-function cleanTokens(str: string): string[] {
-  return str
+/**
+ * Standard Levenshtein edit distance
+ */
+function levenshteinDistance(s1: string, s2: string): number {
+  const m = s1.length;
+  const n = s2.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (s1[i - 1] === s2[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      }
+    }
+  }
+  return dp[m][n];
+}
+
+/**
+ * Checks if a candidate word from OCR matches an expected name token
+ */
+function isTokenMatch(expected: string, candidate: string): boolean {
+  if (expected === candidate) return true;
+
+  // Words with length <= 3 (e.g. "Rey", "Pao", "Lee", "Lim", "Tan", "Sy") must match strictly
+  if (expected.length <= 3 || candidate.length <= 3) {
+    return expected === candidate;
+  }
+
+  // Length difference must not be more than 2
+  const lenDiff = Math.abs(expected.length - candidate.length);
+  if (lenDiff > 2) return false;
+
+  const dist = levenshteinDistance(expected, candidate);
+
+  // For 4-5 chars (e.g. "Juan", "Cruz"): allow at most 1 typo
+  if (expected.length <= 5) {
+    return dist <= 1;
+  }
+
+  // For 6-7 chars (e.g. "Rafael", "Marfil"): allow at most 1 typo
+  if (expected.length <= 7) {
+    return dist <= 1;
+  }
+
+  // For 8+ chars (e.g. "Villanueva"): allow at most 2 typos
+  return dist <= 2;
+}
+
+/**
+ * Extracts clean, valid name tokens from a name string
+ */
+function extractNameTokens(nameStr: string): string[] {
+  return nameStr
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
-    .filter((t) => t.length >= 2);
-}
-
-function tokenMatches(t1: string, t2: string): boolean {
-  if (t1 === t2) return true;
-  if (t1.includes(t2) || t2.includes(t1)) return true;
-  if (t1.length >= 4 && t2.length >= 4 && Math.abs(t1.length - t2.length) <= 1) {
-    let diff = 0;
-    const minLen = Math.min(t1.length, t2.length);
-    for (let i = 0; i < minLen; i++) {
-      if (t1[i] !== t2[i]) diff++;
-      if (diff > 1) return false;
-    }
-    return true;
-  }
-  return false;
+    .filter((t) => {
+      if (NOISE_WORDS.has(t.toUpperCase())) return false;
+      if (["jr", "sr", "ii", "iii", "iv", "mr", "ms", "mrs"].includes(t)) return false;
+      return t.length >= 2 && /[aeiouy]/.test(t);
+    });
 }
 
 /**
@@ -215,40 +346,106 @@ export function checkIdNameMatch(
   participantName: string,
   detectedName?: string,
   rawText?: string
-): { isMatch: boolean; reason?: string } {
+): { isMatch: boolean; reason: string; matchedName?: string } {
   if (!participantName || !participantName.trim()) {
     return { isMatch: false, reason: "Participant name is empty" };
   }
 
-  const pTokens = cleanTokens(participantName);
-  if (pTokens.length === 0) {
-    return { isMatch: false, reason: "Participant name is too short" };
+  const expectedTokens = extractNameTokens(participantName);
+  if (expectedTokens.length === 0) {
+    return { isMatch: false, reason: "Participant name is too short or invalid" };
   }
 
-  const dTokens = detectedName ? cleanTokens(detectedName) : [];
-  const rawTokens = rawText ? cleanTokens(rawText) : [];
+  // For 1-word name: 1 required. For 2-word name ("Rafael Marfil"): 2 required. For 3+ words: at least 2 required.
+  const requiredMatches = expectedTokens.length <= 2 ? expectedTokens.length : 2;
 
-  if (dTokens.length === 0 && rawTokens.length === 0) {
-    return { isMatch: false, reason: "No readable name found on ID. The ID must be visible and legible." };
-  }
-
-  let matchedCount = 0;
-  for (const pt of pTokens) {
-    const foundInDet = dTokens.some((dt) => tokenMatches(pt, dt));
-    const foundInRaw = rawTokens.some((rt) => tokenMatches(pt, rt));
-    if (foundInDet || foundInRaw) {
-      matchedCount++;
+  // 1. Check against detectedName if present and valid
+  if (detectedName && detectedName.trim()) {
+    const dTokens = extractNameTokens(detectedName);
+    const matchedFromDetected = new Set<string>();
+    for (const et of expectedTokens) {
+      if (dTokens.some((dt) => isTokenMatch(et, dt))) {
+        matchedFromDetected.add(et);
+      }
+    }
+    if (matchedFromDetected.size >= requiredMatches) {
+      return {
+        isMatch: true,
+        reason: "Name matches ID",
+        matchedName: detectedName,
+      };
     }
   }
 
-  const requiredMatches = pTokens.length === 1 ? 1 : Math.min(2, pTokens.length);
-  const isMatch = matchedCount >= requiredMatches;
+  // 2. Search rawText lines
+  if (!rawText || !rawText.trim()) {
+    return {
+      isMatch: false,
+      reason: `ID does not match "${participantName}". No readable text found on ID.`,
+    };
+  }
+
+  const lines = rawText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+  // Strategy A: Check line-by-line (e.g. participant name on same line)
+  for (const line of lines) {
+    const lineTokens = extractNameTokens(line);
+    const lineMatches = new Set<string>();
+    for (const et of expectedTokens) {
+      if (lineTokens.some((lt) => isTokenMatch(et, lt))) {
+        lineMatches.add(et);
+      }
+    }
+    if (lineMatches.size >= requiredMatches) {
+      return {
+        isMatch: true,
+        reason: "Name matches ID",
+        matchedName: toTitleCase(lineTokens.join(" ")),
+      };
+    }
+  }
+
+  // Strategy B: Check adjacent lines (e.g. line 1: Last Name, line 2: First Name)
+  for (let i = 0; i < lines.length - 1; i++) {
+    const combinedTokens = extractNameTokens(`${lines[i]} ${lines[i + 1]}`);
+    const adjMatches = new Set<string>();
+    for (const et of expectedTokens) {
+      if (combinedTokens.some((ct) => isTokenMatch(et, ct))) {
+        adjMatches.add(et);
+      }
+    }
+    if (adjMatches.size >= requiredMatches) {
+      return {
+        isMatch: true,
+        reason: "Name matches ID",
+        matchedName: toTitleCase(combinedTokens.join(" ")),
+      };
+    }
+  }
+
+  // Strategy C: Check distinct candidate tokens across the entire document
+  const allDocTokens = extractNameTokens(rawText);
+  const matchedTokens = new Set<string>();
+  const usedCandidateIndices = new Set<number>();
+
+  for (const et of expectedTokens) {
+    for (let ci = 0; ci < allDocTokens.length; ci++) {
+      if (usedCandidateIndices.has(ci)) continue;
+      if (isTokenMatch(et, allDocTokens[ci])) {
+        matchedTokens.add(et);
+        usedCandidateIndices.add(ci);
+        break;
+      }
+    }
+  }
+
+  const isMatch = matchedTokens.size >= requiredMatches;
 
   return {
     isMatch,
     reason: isMatch
       ? "Name matches ID"
-      : `ID does not match "${participantName}". The ID must be visible and legible.`,
+      : `ID does not match "${participantName}". The ID must be visible, legible, and clearly display the participant's name.`,
+    matchedName: isMatch ? participantName : undefined,
   };
 }
-

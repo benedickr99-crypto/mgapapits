@@ -260,9 +260,9 @@ export function OcrInspectionModal({
                             Matches Expected: &ldquo;{expectedName}&rdquo;
                           </span>
                         ) : (
-                          <span className="text-amber-700 font-medium flex items-center gap-1">
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                            Expected: &ldquo;{expectedName}&rdquo;
+                          <span className="text-red-700 font-medium flex items-center gap-1">
+                            <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+                            Does Not Match Expected: &ldquo;{expectedName}&rdquo;
                           </span>
                         )}
                       </div>
