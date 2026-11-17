@@ -478,26 +478,26 @@ function GoogleCalendarSelector({
 
   return (
     <div className="bg-white border border-gray-200 rounded-3xl p-4 sm:p-5 shadow-xs space-y-3.5">
-      {/* Starting Climb & Descent Date Dual Selection Tabs (Available for All 4 Protected Trails) */}
+      {/* Starting Climb & Descent Date Dual Selection Tabs */}
       <div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-2.5">
-          {/* 1. Starting Climb Date Tab */}
+          {/* Climb Date */}
           <button
             type="button"
             onClick={() => setSelectionMode("climb")}
-            className={`p-3 rounded-2xl border-2 text-left transition cursor-pointer ${
+            className={`p-3 rounded-2xl border text-left transition cursor-pointer ${
               selectionMode === "climb"
-                ? "border-emerald-600 bg-emerald-50/80 shadow-xs ring-2 ring-emerald-500/20"
+                ? "border-emerald-600 bg-emerald-50/70 shadow-xs ring-2 ring-emerald-500/20"
                 : "border-slate-200 bg-white hover:bg-slate-50"
             }`}
           >
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
                 <Mountain className="w-3.5 h-3.5 text-emerald-600" />
-                1. Starting Climb Date
+                Climb Date
               </span>
               {selectionMode === "climb" && (
-                <span className="px-1.5 py-0.5 bg-emerald-600 text-white text-[9px] font-black rounded-full uppercase">
+                <span className="px-2 py-0.5 bg-emerald-600 text-white text-[10px] font-bold rounded-full">
                   Selecting
                 </span>
               )}
@@ -506,35 +506,35 @@ function GoogleCalendarSelector({
               {climbDate ? (
                 new Date(climbDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
               ) : (
-                <span className="text-slate-400 font-normal">Click a date on calendar</span>
+                <span className="text-slate-400 font-normal">Select date on calendar</span>
               )}
             </div>
           </button>
 
-          {/* 2. Date to Go Down (Descent) Tab */}
+          {/* Descent Date */}
           <button
             type="button"
             onClick={() => {
               if (!climbDate) {
-                toast.info("Please pick your starting climb date first.");
+                toast.info("Please pick your climb date first.");
                 setSelectionMode("climb");
               } else {
                 setSelectionMode("descent");
               }
             }}
-            className={`p-3 rounded-2xl border-2 text-left transition cursor-pointer ${
+            className={`p-3 rounded-2xl border text-left transition cursor-pointer ${
               selectionMode === "descent"
-                ? "border-blue-600 bg-blue-50/80 shadow-xs ring-2 ring-blue-500/20"
+                ? "border-emerald-600 bg-emerald-50/70 shadow-xs ring-2 ring-emerald-500/20"
                 : "border-slate-200 bg-white hover:bg-slate-50"
             }`}
           >
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[11px] font-black uppercase tracking-wider text-blue-800 flex items-center gap-1.5">
-                <Compass className="w-3.5 h-3.5 text-blue-600" />
-                2. Date to Go Down (Descent)
+              <span className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                <Compass className="w-3.5 h-3.5 text-emerald-600" />
+                Descent Date
               </span>
               {selectionMode === "descent" && (
-                <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[9px] font-black rounded-full uppercase">
+                <span className="px-2 py-0.5 bg-emerald-600 text-white text-[10px] font-bold rounded-full">
                   Selecting
                 </span>
               )}
@@ -543,9 +543,9 @@ function GoogleCalendarSelector({
               {effectiveDescentDate ? (
                 new Date(effectiveDescentDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
               ) : climbDate ? (
-                <span className="text-slate-400 font-normal">Pick descent date</span>
+                <span className="text-slate-400 font-normal">Select descent date</span>
               ) : (
-                <span className="text-slate-400 font-normal">Pick start date first</span>
+                <span className="text-slate-400 font-normal">Pick climb date first</span>
               )}
             </div>
           </button>
@@ -553,22 +553,22 @@ function GoogleCalendarSelector({
 
         {/* Quick Duration Shortcuts */}
         {climbDate && (
-          <div className="flex flex-wrap items-center gap-1.5 py-1 px-1 text-xs">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Quick Presets:</span>
+          <div className="flex flex-wrap items-center gap-1.5 py-1 px-0.5 text-xs">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mr-1">Duration:</span>
             <button
               type="button"
               onClick={() => {
                 onSelectDescentDate(climbDate);
                 setSelectionMode("climb");
-                toast.success("Set to 1-Day Same-Day Dayhike.");
+                toast.success("Set to 1-Day Dayhike.");
               }}
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition cursor-pointer ${
                 effectiveDescentDate === climbDate
                   ? "bg-emerald-600 text-white shadow-2xs"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
               }`}
             >
-              Same-Day Dayhike (1 Day)
+              1 Day (Dayhike)
             </button>
             <button
               type="button"
@@ -578,11 +578,11 @@ function GoogleCalendarSelector({
                 const nextDateKey = formatDateKey(d);
                 onSelectDescentDate(nextDateKey);
                 setSelectionMode("descent");
-                toast.success("Set to 2 Days / 1 Night (Overnight Trek).");
+                toast.success("Set to 2 Days / 1 Night.");
               }}
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition cursor-pointer ${
                 effectiveDescentDate && Math.round((new Date(effectiveDescentDate).getTime() - new Date(climbDate).getTime()) / 86400000) === 1
-                  ? "bg-blue-600 text-white shadow-2xs"
+                  ? "bg-emerald-600 text-white shadow-2xs"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
               }`}
             >
@@ -598,9 +598,9 @@ function GoogleCalendarSelector({
                 setSelectionMode("descent");
                 toast.success("Set to 3 Days / 2 Nights.");
               }}
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition cursor-pointer ${
                 effectiveDescentDate && Math.round((new Date(effectiveDescentDate).getTime() - new Date(climbDate).getTime()) / 86400000) === 2
-                  ? "bg-blue-600 text-white shadow-2xs"
+                  ? "bg-emerald-600 text-white shadow-2xs"
                   : "bg-slate-100 text-slate-700 hover:bg-slate-200"
               }`}
             >
@@ -1686,7 +1686,7 @@ export default function Book() {
                 <div className="lg:col-span-7">
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-sm font-semibold text-gray-700">
-                      Select Starting Climb & Date to Go Down *
+                      Select Climb & Descent Dates *
                     </label>
                     <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border bg-emerald-50 text-emerald-800 border-emerald-200">
                       Daily Schedule
