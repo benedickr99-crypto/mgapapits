@@ -2279,8 +2279,6 @@ export default function Book() {
                               file={participantDocs[idx]?.waiver || null}
                               onChange={(f) => updateParticipantDoc(idx, "waiver", f)}
                               accept=".pdf,.jpg,.jpeg,.png"
-                              downloadUrl="/DENR_NNNP_Trekking_Waiver.docx"
-                              downloadLabel="Download (.docx)"
                             />
                             <DocumentUploadField
                               label="3. Fit-to-Climb Med Cert *"
