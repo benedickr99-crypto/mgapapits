@@ -248,6 +248,7 @@ export default function Login() {
           email: email.trim(),
           password,
           options: {
+            emailRedirectTo: `${window.location.origin}/`,
             data: {
               full_name: fullName.trim(),
               phone: phone.trim(),
@@ -289,12 +290,14 @@ export default function Login() {
         // Send 6-digit OTP code to email
         const { error: otpErr } = await supabase.auth.signInWithOtp({
           email: targetEmail,
+          options: { emailRedirectTo: `${window.location.origin}/` },
         });
         if (otpErr) {
           // If signInWithOtp throws, try resend fallback
           const { error: resendErr } = await supabase.auth.resend({
             type: "signup",
             email: targetEmail,
+            options: { emailRedirectTo: `${window.location.origin}/` },
           });
           if (resendErr) {
             console.warn("Could not send initial signup OTP:", resendErr);
@@ -333,6 +336,7 @@ export default function Login() {
         // 3. Send 6-digit OTP code to email
         const { error: otpErr } = await supabase.auth.signInWithOtp({
           email: targetEmail,
+          options: { emailRedirectTo: `${window.location.origin}/` },
         });
         if (otpErr) {
           throw new Error("Failed to send OTP to email: " + otpErr.message);

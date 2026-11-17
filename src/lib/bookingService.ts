@@ -1,6 +1,18 @@
 import { supabase } from "@/integrations/supabase/client";
 import { NNNP_TRAILS_METADATA } from "./trailData";
 
+export interface OcrVerificationResult {
+  verified: boolean;
+  confidence: number;
+  detectedName?: string;
+  detectedIdType?: string;
+  detectedIdNumber?: string;
+  detectedAge?: number;
+  detectedGender?: string;
+  verifiedAt: string;
+  rawTextPreview?: string;
+}
+
 export interface ParticipantInput {
   fullName: string;
   age: number;
@@ -9,13 +21,18 @@ export interface ParticipantInput {
   emergencyContactName: string;
   emergencyContactPhone: string;
   medicalConditions?: string;
+  validIdUrl?: string;
+  waiverUrl?: string;
+  medicalCertUrl?: string;
+  ocrVerification?: OcrVerificationResult;
 }
 
 export interface BookingSubmission {
   userId: string;
   trailId: string;
   trailName: string;
-  trekkingDate: string; // YYYY-MM-DD
+  trekkingDate: string; // YYYY-MM-DD (Starting Climb Date)
+  descentDate?: string; // YYYY-MM-DD (Date to Go Down)
   timeSlot: string;     // e.g. "05:00 AM - Sunrise Trek"
   participantsCount: number;
   guideId?: string | null;
@@ -26,6 +43,7 @@ export interface BookingSubmission {
   validIdUrl?: string;
   waiverUrl?: string;
   medicalCertUrl?: string;
+  ocrAuditSummary?: string;
 }
 
 export interface AnnouncementItem {
@@ -147,24 +165,49 @@ export async function createOnlineBooking(submission: BookingSubmission) {
   const participantListText = (submission.participants || [])
     .map(
       (p, idx) =>
-        `${idx + 1}. ${p.fullName} | Age: ${p.age || "N/A"} | Gender: ${p.gender || "N/A"} | Phone: ${p.contactNumber || "N/A"} | Emergency: ${p.emergencyContactName || submission.emergencyContactName} (${p.emergencyContactPhone || submission.emergencyContactPhone}) | Medical: ${p.medicalConditions || "None"}`
+        `${idx + 1}. ${p.fullName} | Age: ${p.age || "N/A"} | Gender: ${p.gender || "N/A"} | Phone: ${p.contactNumber || "N/A"} | Emergency: ${p.emergencyContactName || submission.emergencyContactName} (${p.emergencyContactPhone || submission.emergencyContactPhone}) | Medical: ${p.medicalConditions || "None"}${p.validIdUrl ? ` | ID: ${p.validIdUrl}` : ""}${p.waiverUrl ? ` | Waiver: ${p.waiverUrl}` : ""}${p.medicalCertUrl ? ` | MedCert: ${p.medicalCertUrl}` : ""}${p.ocrVerification?.verified ? ` | [OCR: ${p.ocrVerification.detectedIdType || "Govt ID"} Verified (${p.ocrVerification.confidence}%)]` : ""}`
     )
     .join("\n");
 
+  const ocrAuditTrail = (submission.participants || [])
+    .filter((p) => p.ocrVerification?.verified)
+    .map(
+      (p, idx) =>
+        `P#${idx + 1} (${p.fullName}): ${p.ocrVerification?.detectedIdType || "ID"} verified (${p.ocrVerification?.confidence}% match)`
+    )
+    .join("; ");
+
+  const descentDate = submission.descentDate || submission.trekkingDate;
+  const startD = new Date(submission.trekkingDate);
+  const endD = new Date(descentDate);
+  const diffTime = Math.max(0, endD.getTime() - startD.getTime());
+  const diffDays = Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1);
+  const durationText = diffDays === 1 ? "1 Day (Same-Day Dayhike)" : `${diffDays} Days / ${diffDays - 1} Night${diffDays - 1 > 1 ? "s" : ""} (Overnight Trek)`;
+
   const formattedNotes = [
+    `STARTING CLIMB DATE: ${submission.trekkingDate}`,
+    `DATE TO GO DOWN (DESCENT): ${descentDate}`,
+    `TREK DURATION: ${durationText}`,
     `TIME SLOT: ${submission.timeSlot}`,
     `PERMIT / REF: ${referenceNumber}`,
     `EMERGENCY CONTACT: ${submission.emergencyContactName} (${submission.emergencyContactPhone})`,
     submission.medicalNotes ? `GENERAL MEDICAL NOTES: ${submission.medicalNotes}` : null,
+    ocrAuditTrail ? `OCR VERIFICATION: ${ocrAuditTrail}` : null,
     `\nPARTICIPANTS ROSTER (${submission.participantsCount} pax):\n${participantListText}`,
     `\n---METADATA_JSON---`,
     JSON.stringify({
       timeSlot: submission.timeSlot,
       referenceNumber,
+      trekkingDate: submission.trekkingDate,
+      descentDate,
+      durationDays: diffDays,
+      durationText,
       emergencyContactName: submission.emergencyContactName,
       emergencyContactPhone: submission.emergencyContactPhone,
       medicalNotes: submission.medicalNotes || "",
       participants: submission.participants,
+      ocrVerified: (submission.participants || []).some((p) => p.ocrVerification?.verified),
+      ocrAuditTrail: ocrAuditTrail || null,
     }),
   ]
     .filter(Boolean)
@@ -182,6 +225,7 @@ export async function createOnlineBooking(submission: BookingSubmission) {
     emergency_contact_name: submission.emergencyContactName,
     emergency_contact_phone: submission.emergencyContactPhone,
     notes: formattedNotes,
+    admin_notes: ocrAuditTrail ? `[Tesseract OCR Verified]: ${ocrAuditTrail}` : null,
     valid_id_url: submission.validIdUrl || null,
     waiver_url: submission.waiverUrl || null,
     medical_cert_url: submission.medicalCertUrl || null,
@@ -193,6 +237,7 @@ export async function createOnlineBooking(submission: BookingSubmission) {
   try {
     const extendedPayload = {
       ...basePayload,
+      descent_date: descentDate,
       time_slot: submission.timeSlot,
       reference_number: referenceNumber,
       medical_notes: submission.medicalNotes || "",
@@ -324,7 +369,30 @@ export function getBookingParticipants(booking: any): ParticipantInput[] | null 
         const parsed = JSON.parse(booking.notes);
         if (Array.isArray(parsed.participants)) return parsed.participants;
       }
-    } catch (e) {}
+      // 2b. Parse human-readable participant lines if JSON was not embedded or was truncated
+      if (booking.notes.includes("--- PARTICIPANT BREAKDOWN") || /^\s*\d+\.\s+/m.test(booking.notes)) {
+        const lines = booking.notes.split("\n");
+        const parsedList: ParticipantInput[] = [];
+        for (const line of lines) {
+          const m = line.match(/^\s*(\d+)\.\s*([^|]+)/);
+          if (m) {
+            const fullName = m[2].trim();
+            const ageMatch = line.match(/Age:\s*(\d+)/i);
+            const genderMatch = line.match(/Gender:\s*([^|]+)/i);
+            const phoneMatch = line.match(/Phone:\s*([^|]+)/i);
+            parsedList.push({
+              fullName,
+              age: ageMatch ? parseInt(ageMatch[1], 10) : 0,
+              gender: genderMatch ? genderMatch[1].trim() : "",
+              contactNumber: phoneMatch ? phoneMatch[1].trim() : "",
+              emergencyContactName: "",
+              emergencyContactPhone: "",
+            });
+          }
+        }
+        if (parsedList.length > 0) return parsedList;
+      }
+    } catch (e) { }
   }
 
   // 3. Fallback to localStorage
@@ -346,7 +414,7 @@ export function getBookingTimeSlot(booking: any): string {
       }
       const match = booking.notes.match(/TIME SLOT:\s*([^\n\r]+)/i) || booking.notes.match(/Time Slot:\s*([^.]+)/);
       if (match) return match[1].trim();
-    } catch (e) {}
+    } catch (e) { }
   }
   return "06:00 AM - Standard Trek";
 }
@@ -420,7 +488,7 @@ export async function fetchAnnouncements(): Promise<AnnouncementItem[]> {
     if (!error && data && data.length > 0) {
       result = data;
     }
-  } catch (err) {}
+  } catch (err) { }
 
   // Load any locally created announcements as fallback
   if (!result) {
@@ -430,7 +498,7 @@ export async function fetchAnnouncements(): Promise<AnnouncementItem[]> {
         const custom: AnnouncementItem[] = JSON.parse(local);
         result = [...custom, ...DEFAULT_ANNOUNCEMENTS];
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   const finalAnnouncements = result || DEFAULT_ANNOUNCEMENTS;
@@ -471,7 +539,7 @@ export async function saveAnnouncement(announcement: Omit<AnnouncementItem, "id"
     const list: AnnouncementItem[] = current ? JSON.parse(current) : [];
     list.unshift(newAnn);
     localStorage.setItem("nnnp_custom_announcements", JSON.stringify(list));
-  } catch (e) {}
+  } catch (e) { }
 
   return newAnn;
 }
@@ -562,7 +630,7 @@ export async function fetchReviews(): Promise<RatingReviewItem[]> {
     if (local) {
       localReviews = JSON.parse(local);
     }
-  } catch (e) {}
+  } catch (e) { }
 
   // Merge unique reviews by id
   const combined = [...localReviews, ...dbReviews, ...DEFAULT_REVIEWS];
@@ -636,7 +704,7 @@ export async function submitReview(review: {
     const list = current ? JSON.parse(current) : [];
     list.unshift(item);
     localStorage.setItem("nnnp_custom_reviews", JSON.stringify(list));
-  } catch (e) {}
+  } catch (e) { }
 
   return item;
 }
@@ -649,7 +717,7 @@ export async function deleteBooking(bookingId: string) {
       p_booking_id: bookingId,
     });
     if (!rpcError) return true;
-  } catch {}
+  } catch { }
 
   // 2. Direct delete fallback
   const { error: directError } = await supabase

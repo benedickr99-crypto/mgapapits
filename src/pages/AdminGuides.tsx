@@ -399,7 +399,9 @@ export default function AdminGuides() {
   // Form states
   const [selectedUserId, setSelectedUserId] = useState("");
   const [formData, setFormData] = useState({
-    name: "",
+    firstName: "",
+    middleName: "",
+    lastName: "",
     experience_years: 0,
     contact_info: "",
     certifications: "",
@@ -407,6 +409,33 @@ export default function AdminGuides() {
     image_url: "",
     active: true,
   });
+
+  const parseFullName = (fullName: string) => {
+    if (!fullName) return { firstName: "", middleName: "", lastName: "" };
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length === 1) {
+      return { firstName: parts[0], middleName: "", lastName: "" };
+    } else if (parts.length === 2) {
+      return { firstName: parts[0], middleName: "", lastName: parts[1] };
+    } else if (parts.length === 3) {
+      if (parts[1].length <= 2 || parts[1].endsWith(".")) {
+        return { firstName: parts[0], middleName: parts[1], lastName: parts[2] };
+      }
+      return {
+        firstName: `${parts[0]} ${parts[1]}`,
+        middleName: "",
+        lastName: parts[2],
+      };
+    } else {
+      // 4 or more parts, e.g. "Jude Kenneth Layola Menosa"
+      // First Name: "Jude Kenneth", Middle Name: "Layola", Last Name: "Menosa"
+      return {
+        firstName: parts.slice(0, parts.length - 2).join(" "),
+        middleName: parts[parts.length - 2],
+        lastName: parts[parts.length - 1],
+      };
+    }
+  };
 
   const fetchGuides = async (isInitial = false) => {
     if (isInitial) setLoading(true);
@@ -503,8 +532,11 @@ export default function AdminGuides() {
     if (guide) {
       setEditingGuide(guide);
       setSelectedUserId(guide.id);
+      const parsed = parseFullName(guide.full_name || "");
       setFormData({
-        name: guide.full_name || "",
+        firstName: parsed.firstName,
+        middleName: parsed.middleName,
+        lastName: parsed.lastName,
         experience_years: guide.experience_years || 0,
         contact_info: guide.phone || "",
         certifications: guide.certifications || "",
@@ -516,7 +548,9 @@ export default function AdminGuides() {
       setEditingGuide(null);
       setSelectedUserId("");
       setFormData({
-        name: "",
+        firstName: "",
+        middleName: "",
+        lastName: "",
         experience_years: 1,
         contact_info: "",
         certifications: "Standard NNNP Tour Guide",
@@ -624,9 +658,14 @@ export default function AdminGuides() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const computedFullName = [formData.firstName, formData.middleName, formData.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+
       if (editingGuide) {
         const payload = {
-          full_name: formData.name,
+          full_name: computedFullName,
           experience_years: formData.experience_years,
           phone: formData.contact_info,
           certifications: formData.certifications,
@@ -644,7 +683,7 @@ export default function AdminGuides() {
           return;
         }
         const payload = {
-          full_name: formData.name,
+          full_name: computedFullName,
           experience_years: formData.experience_years,
           phone: formData.contact_info,
           certifications: formData.certifications,
@@ -715,157 +754,6 @@ export default function AdminGuides() {
   return (
     <div className="space-y-8">
 
-      {/* ─────────── PENDING APPLICANTS ─────────── */}
-      {pendingApplicants.length > 0 ? (
-        <div className="bg-amber-50/80 rounded-3xl border-2 border-amber-300 p-6 shadow-sm">
-          {/* Section Header */}
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-3">
-              <span className={`p-2 bg-amber-500 text-white rounded-xl relative ${newApplicantAlert ? "animate-pulse" : ""}`}>
-                <Clock size={20} />
-                {newApplicantAlert && (
-                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white" />
-                )}
-              </span>
-              <div>
-                <h3 className="text-lg font-black text-amber-950 flex items-center gap-2">
-                  Pending Tour Guide Applications
-                  <span className="inline-flex items-center justify-center bg-amber-500 text-white text-xs font-black rounded-full w-6 h-6">
-                    {pendingApplicants.length}
-                  </span>
-                </h3>
-                <p className="text-xs text-amber-700">
-                  Review each applicant's ID/certificate before approving or rejecting.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Bell size={14} className="text-amber-600" />
-              <span className="px-3 py-1 bg-amber-200/80 text-amber-900 rounded-full text-xs font-bold uppercase tracking-wider">
-                Requires Review
-              </span>
-            </div>
-          </div>
-
-          {/* Applicant Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {pendingApplicants.map((applicant) => (
-              <div
-                key={applicant.id}
-                className="bg-white rounded-2xl border border-amber-200 shadow-sm hover:shadow-md transition flex flex-col overflow-hidden"
-              >
-                {/* Card top stripe */}
-                <div className="h-1.5 w-full bg-gradient-to-r from-amber-400 to-orange-400" />
-
-                <div className="p-5 flex flex-col flex-1">
-                  {/* Identity row */}
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-800 font-black text-xl flex items-center justify-center border-2 border-amber-200 flex-shrink-0">
-                        {applicant.full_name?.charAt(0) || "?"}
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-gray-900 text-sm leading-tight">
-                          {applicant.full_name || "Applicant"}
-                        </h4>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                            Role: Tour Guide
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <span className="px-2.5 py-1 bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-black uppercase tracking-wider flex-shrink-0">
-                      Pending Review
-                    </span>
-                  </div>
-
-                  {/* Actual Registration Details */}
-                  <div className="text-xs text-gray-600 space-y-1.5 mb-3 bg-gray-50 rounded-xl p-3 border border-gray-100">
-                    <div className="flex items-center gap-1.5 text-gray-700">
-                      <Phone size={12} className="text-gray-400 shrink-0" />
-                      <span><strong>Phone:</strong> {applicant.phone || "Not provided"}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-gray-700">
-                      <Mail size={12} className="text-gray-400 shrink-0" />
-                      <span className="truncate"><strong>Email:</strong> {applicant.email || "Not specified in profile"}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-gray-700">
-                      <MapPin size={12} className="text-gray-400 shrink-0" />
-                      <span className="truncate"><strong>Address:</strong> {applicant.address || "Not provided"}</span>
-                    </div>
-                    {applicant.created_at && (
-                      <p className="text-[10px] text-gray-400 pt-1 border-t border-gray-200">
-                        Applied {new Date(applicant.created_at).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Guide ID / Accreditation Certificate Status */}
-                  <div className="mb-4">
-                    {applicant.guide_id_url ? (
-                      <div className="rounded-xl overflow-hidden border border-amber-200 bg-amber-50 p-2.5">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-[11px] font-bold text-emerald-800 flex items-center gap-1">
-                            <CheckCircle size={13} className="text-emerald-600" />
-                            Guide ID / Accreditation Certificate: <span className="underline ml-0.5">Uploaded</span>
-                          </span>
-                        </div>
-                        {/\.(jpg|jpeg|png|gif|webp)$/i.test(applicant.guide_id_url) ? (
-                          <div className="relative rounded-lg overflow-hidden bg-white h-24 border border-amber-100">
-                            <img
-                              src={applicant.guide_id_url}
-                              alt="ID Preview"
-                              className="w-full h-full object-contain"
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 bg-white rounded-lg p-2 border border-amber-100">
-                            <FileText size={20} className="text-amber-600" />
-                            <span className="text-[11px] font-medium text-gray-700">PDF Certificate Document</span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-2.5">
-                        <AlertTriangle size={16} className="text-red-500 flex-shrink-0" />
-                        <p className="text-xs font-semibold text-red-600">No accreditation certificate uploaded</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Action button */}
-                  <div className="mt-auto">
-                    <button
-                      onClick={() => {
-                        setNewApplicantAlert(false);
-                        setReviewApplicant(applicant);
-                      }}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-sm transition"
-                    >
-                      <FileText size={14} /> Review Application
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        /* Empty state for pending */
-        <div className="bg-emerald-50 border-2 border-emerald-200 rounded-3xl p-6 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-200 flex items-center justify-center flex-shrink-0">
-            <CheckCircle size={24} className="text-emerald-700" />
-          </div>
-          <div>
-            <h3 className="text-sm font-black text-emerald-800">No Pending Applications</h3>
-            <p className="text-xs text-emerald-600 mt-0.5">
-              All guide applications have been reviewed. New applications will appear here automatically.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* ─────────── ACTIVE GUIDES ─────────── */}
       <div className="bg-white rounded-3xl shadow-sm border border-gray-200 p-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
@@ -875,12 +763,6 @@ export default function AdminGuides() {
               Active guides available for trekking assignments in Northern Negros Natural Park.
             </p>
           </div>
-          <button
-            onClick={() => handleOpenModal()}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs transition shadow-sm"
-          >
-            <Plus size={16} /> Promote / Add Guide
-          </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -908,9 +790,8 @@ export default function AdminGuides() {
                   </div>
                 </div>
                 <span
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                    guide.is_available ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-700"
-                  }`}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${guide.is_available ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-700"
+                    }`}
                 >
                   {guide.is_available ? "Active" : "Inactive"}
                 </span>
@@ -925,7 +806,6 @@ export default function AdminGuides() {
                     <strong className="text-gray-900">Cert:</strong> {guide.certifications}
                   </p>
                 )}
-                {guide.bio && <p className="text-gray-500 line-clamp-2 mt-2">{guide.bio}</p>}
               </div>
 
               <div className="flex gap-2 mt-auto pt-4 border-t border-gray-100">
@@ -937,11 +817,10 @@ export default function AdminGuides() {
                 </button>
                 <button
                   onClick={() => toggleActive(guide)}
-                  className={`flex-1 flex justify-center items-center gap-1.5 py-2 rounded-xl text-xs font-bold transition ${
-                    guide.is_available
+                  className={`flex-1 flex justify-center items-center gap-1.5 py-2 rounded-xl text-xs font-bold transition ${guide.is_available
                       ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
                       : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                  }`}
+                    }`}
                 >
                   {guide.is_available ? <XCircle size={13} /> : <CheckCircle size={13} />}
                   {guide.is_available ? "Deactivate" : "Activate"}
@@ -992,9 +871,12 @@ export default function AdminGuides() {
                       setSelectedUserId(uid);
                       const found = candidateUsers.find((c) => c.id === uid);
                       if (found) {
+                        const parsed = parseFullName(found.full_name || "");
                         setFormData((prev) => ({
                           ...prev,
-                          name: found.full_name || "",
+                          firstName: parsed.firstName,
+                          middleName: parsed.middleName,
+                          lastName: parsed.lastName,
                           contact_info: found.phone || "",
                         }));
                       }
@@ -1012,15 +894,48 @@ export default function AdminGuides() {
                 </div>
               ) : null}
 
-              <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                  Full Name *
-                </label>
-                <input
-                  required type="text" value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full border border-gray-300 p-2.5 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="flex flex-col">
+                  <label className="h-5 flex items-center text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                    First Name *
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="First Name"
+                    value={formData.firstName}
+                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    className="w-full border border-gray-300 p-2.5 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+
+                <div className="flex flex-col">
+                  <label className="h-5 flex items-center justify-between text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                    <span>Middle Name</span>
+                    <span className="text-[10px] text-gray-400 font-normal lowercase tracking-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Middle Name"
+                    value={formData.middleName}
+                    onChange={(e) => setFormData({ ...formData, middleName: e.target.value })}
+                    className="w-full border border-gray-300 p-2.5 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+
+                <div className="flex flex-col">
+                  <label className="h-5 flex items-center text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                    Last Name *
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="Last Name"
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                    className="w-full border border-gray-300 p-2.5 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1055,17 +970,6 @@ export default function AdminGuides() {
                   value={formData.certifications}
                   onChange={(e) => setFormData({ ...formData, certifications: e.target.value })}
                   className="w-full border border-gray-300 p-2.5 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-                  Bio / Specialties
-                </label>
-                <textarea
-                  rows={2} value={formData.bio}
-                  onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                  className="w-full border border-gray-300 p-2.5 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
                 />
               </div>
 

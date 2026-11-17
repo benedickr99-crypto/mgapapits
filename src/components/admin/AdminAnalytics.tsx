@@ -1221,36 +1221,8 @@ export const AdminAnalytics = ({ bookings, guides, trails }: AnalyticsProps) => 
             </table>
           </div>
 
-          {/* Excel Status Bar & Formula Summary Footer */}
-          <div className="bg-slate-100 border-t border-slate-200 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-4 flex-wrap text-slate-600 font-mono text-[11px]">
-              <span className="text-slate-400 font-sans font-bold uppercase tracking-wider text-[10px]">
-                {activeSheet.toUpperCase()} STATS:
-              </span>
-              <span>
-                <strong className="text-slate-800">COUNT</strong> ={" "}
-                <span className="text-slate-900 font-bold">{currentSheetData.length}</span>
-              </span>
-              {activeSheet === "permits" && (
-                <span>
-                  <strong className="text-slate-800">SUM</strong>(Trekkers) ={" "}
-                  <span className="text-emerald-700 font-bold">{totalTrekkers}</span>
-                </span>
-              )}
-              {activeSheet === "incidents" && (
-                <span>
-                  <strong className="text-slate-800">RESOLVED</strong> ={" "}
-                  <span className="text-emerald-700 font-bold">{resolvedIncidents}</span>
-                </span>
-              )}
-              {activeSheet === "reviews" && (
-                <span>
-                  <strong className="text-slate-800">AVG_RATING</strong> ={" "}
-                  <span className="text-amber-600 font-bold">{avgRating} ★</span>
-                </span>
-              )}
-            </div>
-
+          {/* Excel Status Bar & Pagination Footer */}
+          <div className="bg-slate-100 border-t border-slate-200 px-4 py-3 flex items-center justify-center text-xs">
             {/* Pagination Controls */}
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-slate-500 font-medium">

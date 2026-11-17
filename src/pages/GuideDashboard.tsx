@@ -98,6 +98,8 @@ export default function GuideDashboard() {
 
   const [offDates, setOffDates] = useState<string[]>([]);
   const [currentWeekMonday, setCurrentWeekMonday] = useState<Date>(() => getMonday(new Date()));
+  const [currentMonthDate, setCurrentMonthDate] = useState<Date>(() => new Date());
+  const [calendarView, setCalendarView] = useState<"month" | "week">("month");
   const [weeklyRoutine, setWeeklyRoutine] = useState<number[]>(() => {
     // 1: Mon, 2: Tue, 3: Wed, 4: Thu, 5: Fri, 6: Sat, 0: Sun
     try {
@@ -466,13 +468,40 @@ export default function GuideDashboard() {
     setCurrentWeekMonday(getMonday(new Date()));
   };
 
-  const jumpToDateWeek = (dateStr: string) => {
+  const goToPrevious = () => {
+    if (calendarView === "month") {
+      setCurrentMonthDate((curr) => new Date(curr.getFullYear(), curr.getMonth() - 1, 1));
+    } else {
+      goToPreviousWeek();
+    }
+  };
+
+  const goToNext = () => {
+    if (calendarView === "month") {
+      setCurrentMonthDate((curr) => new Date(curr.getFullYear(), curr.getMonth() + 1, 1));
+    } else {
+      goToNextWeek();
+    }
+  };
+
+  const goToToday = () => {
+    const today = new Date();
+    setCurrentMonthDate(new Date(today.getFullYear(), today.getMonth(), 1));
+    goToThisWeek();
+  };
+
+  const jumpToDate = (dateStr: string) => {
     if (!dateStr) return;
     const parts = dateStr.split("-");
     if (parts.length === 3) {
       const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      setCurrentMonthDate(new Date(d.getFullYear(), d.getMonth(), 1));
       setCurrentWeekMonday(getMonday(d));
     }
+  };
+
+  const jumpToDateWeek = (dateStr: string) => {
+    jumpToDate(dateStr);
   };
 
   // 7 days of the currently selected week (Mon -> Sun)
@@ -507,6 +536,119 @@ export default function GuideDashboard() {
       };
     });
   }, [currentWeekMonday, offDates, bookings]);
+
+  // Google Calendar: Full Month Grid Days (Monday -> Sunday)
+  const monthDays = useMemo(() => {
+    const year = currentMonthDate.getFullYear();
+    const month = currentMonthDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    // Start with Monday (0 = Mon ... 6 = Sun)
+    const startDayIndex = (firstDay.getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+    const todayStr = formatDateKey(new Date());
+
+    const result: {
+      date: Date;
+      dateStr: string;
+      dayNumber: number;
+      dayOfWeek: number;
+      dayName: string;
+      isCurrentMonth: boolean;
+      isToday: boolean;
+      isPast: boolean;
+      isOff: boolean;
+      dayBookings: Booking[];
+    }[] = [];
+
+    // Previous month overflow days
+    for (let i = startDayIndex - 1; i >= 0; i--) {
+      const d = new Date(year, month - 1, daysInPrevMonth - i);
+      const dateStr = formatDateKey(d);
+      const isOff = offDates.includes(dateStr);
+      const dayBookings = bookings.filter(
+        (b) => b.climb_date === dateStr && b.status !== "declined" && b.status !== "cancelled"
+      );
+      result.push({
+        date: d,
+        dateStr,
+        dayNumber: daysInPrevMonth - i,
+        dayOfWeek: d.getDay(),
+        dayName: d.toLocaleDateString("en-US", { weekday: "short" }),
+        isCurrentMonth: false,
+        isToday: dateStr === todayStr,
+        isPast: dateStr < todayStr,
+        isOff,
+        dayBookings,
+      });
+    }
+
+    // Current month days
+    for (let dNum = 1; dNum <= daysInMonth; dNum++) {
+      const d = new Date(year, month, dNum);
+      const dateStr = formatDateKey(d);
+      const isOff = offDates.includes(dateStr);
+      const dayBookings = bookings.filter(
+        (b) => b.climb_date === dateStr && b.status !== "declined" && b.status !== "cancelled"
+      );
+      result.push({
+        date: d,
+        dateStr,
+        dayNumber: dNum,
+        dayOfWeek: d.getDay(),
+        dayName: d.toLocaleDateString("en-US", { weekday: "short" }),
+        isCurrentMonth: true,
+        isToday: dateStr === todayStr,
+        isPast: dateStr < todayStr,
+        isOff,
+        dayBookings,
+      });
+    }
+
+    // Next month overflow days
+    const remaining = (7 - (result.length % 7)) % 7;
+    for (let i = 1; i <= remaining; i++) {
+      const d = new Date(year, month + 1, i);
+      const dateStr = formatDateKey(d);
+      const isOff = offDates.includes(dateStr);
+      const dayBookings = bookings.filter(
+        (b) => b.climb_date === dateStr && b.status !== "declined" && b.status !== "cancelled"
+      );
+      result.push({
+        date: d,
+        dateStr,
+        dayNumber: i,
+        dayOfWeek: d.getDay(),
+        dayName: d.toLocaleDateString("en-US", { weekday: "short" }),
+        isCurrentMonth: false,
+        isToday: dateStr === todayStr,
+        isPast: dateStr < todayStr,
+        isOff,
+        dayBookings,
+      });
+    }
+
+    return result;
+  }, [currentMonthDate, offDates, bookings]);
+
+  const currentMonthLabel = useMemo(() => {
+    return currentMonthDate.toLocaleDateString("en-US", {
+      month: "long",
+      year: "numeric",
+    });
+  }, [currentMonthDate]);
+
+  const monthAvailableCount = useMemo(() => {
+    return monthDays.filter((d) => d.isCurrentMonth && !d.isOff).length;
+  }, [monthDays]);
+
+  const monthOffCount = useMemo(() => {
+    return monthDays.filter((d) => d.isCurrentMonth && d.isOff).length;
+  }, [monthDays]);
+
+  const monthTreksCount = useMemo(() => {
+    return monthDays.filter((d) => d.isCurrentMonth).reduce((acc, d) => acc + d.dayBookings.length, 0);
+  }, [monthDays]);
 
   const currentWeekLabel = useMemo(() => {
     const monday = currentWeekDays[0]?.date || currentWeekMonday;
@@ -557,15 +699,19 @@ export default function GuideDashboard() {
     }
   };
 
-  // Quick weekly batch actions
-  const applyWeekAction = async (action: "all_available" | "all_off" | "weekdays_only" | "weekends_only") => {
+  // Batch actions for active calendar view
+  const applyBatchAction = async (action: "all_available" | "all_off" | "weekdays_only" | "weekends_only") => {
     if (!user) return;
     setIsUpdatingAvailability(true);
     try {
+      const targetDays = calendarView === "month"
+        ? monthDays.filter((d) => d.isCurrentMonth)
+        : currentWeekDays;
+
       const datesToTurnOff: string[] = [];
       const datesToTurnAvailable: string[] = [];
 
-      currentWeekDays.forEach((day) => {
+      targetDays.forEach((day) => {
         if (action === "all_available") {
           datesToTurnAvailable.push(day.dateStr);
         } else if (action === "all_off") {
@@ -605,13 +751,15 @@ export default function GuideDashboard() {
       }
 
       await fetchAvailability();
-      toast.success("Weekly schedule updated successfully!");
+      toast.success(`${calendarView === "month" ? "Monthly" : "Weekly"} schedule updated!`);
     } catch (err: any) {
-      toast.error("Failed to update weekly schedule: " + (err.message || ""));
+      toast.error("Failed to update schedule: " + (err.message || ""));
     } finally {
       setIsUpdatingAvailability(false);
     }
   };
+
+  const applyWeekAction = applyBatchAction;
 
   const toggleRoutineDay = (dayIndex: number) => {
     setWeeklyRoutine((prev) => {
@@ -1499,27 +1647,29 @@ export default function GuideDashboard() {
           </div>
         ) : activeTab === "availability" ? (
           <div className="space-y-8 max-w-6xl">
-            {/* WEEKLY AVAILABILITY MAIN CARD */}
-            <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200">
+            {/* GOOGLE CALENDAR AVAILABILITY MAIN CARD */}
+            <div className="bg-white p-5 sm:p-7 rounded-3xl shadow-sm border border-slate-200">
               {/* Header & Overview Stats */}
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-100">
                 <div>
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold uppercase tracking-wider mb-2">
-                    <CalendarDays size={13} /> Weekly Roster System
+                    <CalendarDays size={13} /> Weekly & Monthly Roster System
                   </div>
-                  <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Weekly Availability & Schedule</h3>
+                  <h3 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Availability & Roster Schedule</h3>
                   <p className="text-slate-500 font-medium text-sm mt-1">
-                    Manage your schedule week-by-week. Trek assignments and visitor bookings automatically follow your open days.
+                    Google Calendar schedule manager. Trek assignments and visitor bookings automatically follow your duty dates.
                   </p>
                 </div>
 
-                {/* Quick Week Stats */}
+                {/* Quick Stats Badges */}
                 <div className="flex items-center gap-3 flex-wrap">
                   <div className="px-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2.5">
                     <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                     <div>
                       <div className="text-[10px] font-black uppercase tracking-wider text-emerald-700">Available</div>
-                      <div className="text-sm font-black text-emerald-900">{weekAvailableCount} / 7 Days</div>
+                      <div className="text-sm font-black text-emerald-900">
+                        {calendarView === "month" ? monthAvailableCount : weekAvailableCount} / {calendarView === "month" ? monthDays.filter((d) => d.isCurrentMonth).length : 7} Days
+                      </div>
                     </div>
                   </div>
 
@@ -1527,7 +1677,9 @@ export default function GuideDashboard() {
                     <Coffee size={14} className="text-slate-500" />
                     <div>
                       <div className="text-[10px] font-black uppercase tracking-wider text-slate-600">Off-Duty</div>
-                      <div className="text-sm font-black text-slate-800">{weekOffCount} Days</div>
+                      <div className="text-sm font-black text-slate-800">
+                        {calendarView === "month" ? monthOffCount : weekOffCount} Days
+                      </div>
                     </div>
                   </div>
 
@@ -1535,182 +1687,328 @@ export default function GuideDashboard() {
                     <Compass size={14} className="text-amber-600" />
                     <div>
                       <div className="text-[10px] font-black uppercase tracking-wider text-amber-700">Scheduled Treks</div>
-                      <div className="text-sm font-black text-amber-900">{weekTreksCount} Trek{weekTreksCount === 1 ? "" : "s"}</div>
+                      <div className="text-sm font-black text-amber-900">
+                        {calendarView === "month" ? monthTreksCount : weekTreksCount} Trek{(calendarView === "month" ? monthTreksCount : weekTreksCount) === 1 ? "" : "s"}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Week Navigation Control Bar */}
-              <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 py-6">
-                {/* Navigation Buttons */}
-                <div className="flex items-center gap-2">
+              {/* Google Calendar Toolbar: Today + Chevrons + Title + View Switcher */}
+              <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 py-4 mb-2">
+                {/* Left: Today, Nav Chevrons, Month/Week Label */}
+                <div className="flex items-center gap-3 flex-wrap">
                   <button
-                    onClick={goToPreviousWeek}
+                    onClick={goToToday}
                     disabled={isUpdatingAvailability}
-                    className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl transition disabled:opacity-50 flex items-center gap-1.5 text-xs"
-                    title="Previous Week"
+                    className="px-4 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold rounded-full text-xs sm:text-sm transition shadow-2xs hover:shadow-xs disabled:opacity-50 cursor-pointer"
                   >
-                    <ChevronLeft size={16} /> Prev Week
+                    Today
                   </button>
 
-                  <button
-                    onClick={goToThisWeek}
-                    disabled={isUpdatingAvailability}
-                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl transition text-xs shadow-sm shadow-emerald-600/20"
-                  >
-                    This Week
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={goToPrevious}
+                      disabled={isUpdatingAvailability}
+                      className="p-2 hover:bg-slate-100 text-slate-700 rounded-full transition disabled:opacity-50 cursor-pointer"
+                      title="Previous"
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    <button
+                      onClick={goToNext}
+                      disabled={isUpdatingAvailability}
+                      className="p-2 hover:bg-slate-100 text-slate-700 rounded-full transition disabled:opacity-50 cursor-pointer"
+                      title="Next"
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  </div>
 
-                  <button
-                    onClick={goToNextWeek}
-                    disabled={isUpdatingAvailability}
-                    className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl transition disabled:opacity-50 flex items-center gap-1.5 text-xs"
-                    title="Next Week"
-                  >
-                    Next Week <ChevronRight size={16} />
-                  </button>
+                  <h4 className="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
+                    <Calendar size={20} className="text-emerald-600" />
+                    <span>{calendarView === "month" ? currentMonthLabel : currentWeekLabel}</span>
+                  </h4>
                 </div>
 
-                {/* Week Label */}
-                <div className="text-center font-black text-slate-800 text-base sm:text-lg flex items-center justify-center gap-2">
-                  <Calendar size={18} className="text-emerald-600" />
-                  <span>Week: {currentWeekLabel}</span>
-                </div>
+                {/* Right: View Switcher (Month / Week) + Jump */}
+                <div className="flex items-center gap-3 justify-between md:justify-end flex-wrap">
+                  <div className="inline-flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                    <button
+                      onClick={() => setCalendarView("month")}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        calendarView === "month"
+                          ? "bg-white text-emerald-800 shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      Month
+                    </button>
+                    <button
+                      onClick={() => setCalendarView("week")}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        calendarView === "week"
+                          ? "bg-white text-emerald-800 shadow-xs"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      Week
+                    </button>
+                  </div>
 
-                {/* Jump to specific date */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Jump:</span>
-                  <input
-                    type="date"
-                    onChange={(e) => jumpToDateWeek(e.target.value)}
-                    className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500"
-                    title="Jump to the week of this date"
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">Jump:</span>
+                    <input
+                      type="date"
+                      onChange={(e) => jumpToDate(e.target.value)}
+                      className="p-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                      title="Jump to date"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Weekly Quick Batch Actions Bar */}
+              {/* Quick Presets Bar */}
               <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 sm:p-4 mb-6 flex flex-wrap items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2 text-xs font-black text-slate-600 uppercase tracking-wider">
-                  <Sparkles size={14} className="text-emerald-600" /> Week Presets:
+                  <Sparkles size={14} className="text-emerald-600" /> Schedule Presets ({calendarView === "month" ? "Month" : "Week"}):
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <button
-                    onClick={() => applyWeekAction("all_available")}
+                    onClick={() => applyBatchAction("all_available")}
                     disabled={isUpdatingAvailability}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition disabled:opacity-50 flex items-center gap-1.5 shadow-sm cursor-pointer"
                   >
                     <CheckCheck size={13} /> Mark All Available
                   </button>
                   <button
-                    onClick={() => applyWeekAction("all_off")}
+                    onClick={() => applyBatchAction("all_off")}
                     disabled={isUpdatingAvailability}
-                    className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition disabled:opacity-50 flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Coffee size={13} /> Mark Whole Week Off
+                    <Coffee size={13} /> Mark All Off-Duty
                   </button>
                   <button
-                    onClick={() => applyWeekAction("weekdays_only")}
+                    onClick={() => applyBatchAction("weekdays_only")}
                     disabled={isUpdatingAvailability}
-                    className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition disabled:opacity-50"
+                    className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition disabled:opacity-50 cursor-pointer"
                   >
                     Mon–Fri Available Only
                   </button>
                   <button
-                    onClick={() => applyWeekAction("weekends_only")}
+                    onClick={() => applyBatchAction("weekends_only")}
                     disabled={isUpdatingAvailability}
-                    className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition disabled:opacity-50"
+                    className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition disabled:opacity-50 cursor-pointer"
                   >
                     Sat–Sun Available Only
                   </button>
                 </div>
               </div>
 
-              {/* 7-Day Calendar Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
-                {currentWeekDays.map((day) => {
-                  const isAvailable = !day.isOff;
-                  return (
-                    <div
-                      key={day.dateStr}
-                      className={`relative p-4 rounded-2xl border-2 flex flex-col justify-between transition-all ${
-                        day.isToday
-                          ? "ring-2 ring-emerald-500 shadow-md "
-                          : ""
-                      } ${
-                        isAvailable
-                          ? "bg-emerald-50/40 border-emerald-200 hover:border-emerald-300"
-                          : "bg-slate-50 border-slate-200 hover:border-slate-300"
-                      }`}
-                    >
-                      {/* Top Header of Card */}
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className={`text-xs font-black tracking-wider uppercase ${isAvailable ? "text-emerald-800" : "text-slate-500"}`}>
-                            {day.dayName}
-                          </span>
-                          {day.isToday && (
-                            <span className="px-1.5 py-0.5 bg-emerald-600 text-white rounded text-[9px] font-black uppercase tracking-wider">
-                              Today
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Date Number */}
-                        <div className="mb-3">
-                          <div className="text-2xl font-black text-slate-800 tracking-tight leading-none">
-                            {day.date.getDate()}
-                          </div>
-                          <div className="text-[11px] font-bold text-slate-400 uppercase mt-0.5">
-                            {day.date.toLocaleDateString("en-US", { month: "short" })}
-                          </div>
-                        </div>
-
-                        {/* Status Badge */}
-                        <div className="mb-3">
-                          {isAvailable ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-full text-[11px] font-bold">
-                              <CheckCircle size={12} className="text-emerald-600" /> Available
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-200 text-slate-700 border border-slate-300 rounded-full text-[11px] font-bold">
-                              <Coffee size={12} className="text-slate-500" /> Off-Duty
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Treks on this day */}
-                        {day.dayBookings.length > 0 && (
-                          <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 font-semibold space-y-1">
-                            <div className="flex items-center gap-1 text-amber-700 font-bold">
-                              <Compass size={12} /> {day.dayBookings.length} Trek Scheduled
-                            </div>
-                            {day.dayBookings.map((b) => (
-                              <div key={b.id} className="truncate text-[10px] text-amber-800">
-                                • {b.trails?.name || "Trail"} ({b.group_size} pax)
-                              </div>
-                            ))}
-                          </div>
-                        )}
+              {/* GOOGLE CALENDAR VIEW */}
+              {calendarView === "month" ? (
+                /* Full Google Calendar Month Grid */
+                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs bg-white">
+                  {/* 7 Days Headers (Monday -> Sunday) */}
+                  <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 text-center">
+                    {["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].map((weekday) => (
+                      <div
+                        key={weekday}
+                        className="py-3 text-xs font-bold tracking-wider text-slate-500 uppercase border-r last:border-r-0 border-slate-200"
+                      >
+                        {weekday}
                       </div>
+                    ))}
+                  </div>
 
-                      {/* Interactive Toggle Button */}
-                      <button
-                        onClick={() => toggleAvailability(day.dateStr, isAvailable ? "available" : "off")}
-                        disabled={isUpdatingAvailability}
-                        className={`w-full py-2 px-3 rounded-xl font-bold text-xs transition-all disabled:opacity-50 mt-2 ${
+                  {/* 7x5 or 7x6 Calendar Grid Cells */}
+                  <div className="grid grid-cols-7 divide-x divide-y divide-slate-200">
+                    {monthDays.map((day) => {
+                      const isAvailable = !day.isOff;
+                      return (
+                        <div
+                          key={day.dateStr}
+                          onClick={() => toggleAvailability(day.dateStr, isAvailable ? "available" : "off")}
+                          className={`min-h-[115px] sm:min-h-[130px] p-2 flex flex-col justify-between transition-colors cursor-pointer group relative ${
+                            !day.isCurrentMonth
+                              ? "bg-slate-50/50 text-slate-400 hover:bg-slate-100/60"
+                              : isAvailable
+                              ? "bg-white hover:bg-emerald-50/30"
+                              : "bg-slate-100/40 hover:bg-slate-100/80"
+                          }`}
+                        >
+                          {/* Day Cell Top: Date Number & Duty Status */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              {day.isToday ? (
+                                <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center shadow-xs">
+                                  {day.dayNumber}
+                                </span>
+                              ) : (
+                                <span
+                                  className={`text-xs font-semibold ${
+                                    day.isCurrentMonth ? "text-slate-700 group-hover:text-emerald-700" : "text-slate-400"
+                                  }`}
+                                >
+                                  {day.dayNumber}
+                                </span>
+                              )}
+
+                              {day.isToday && (
+                                <span className="text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-100/80 px-1.5 py-0.2 rounded">
+                                  TODAY
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Duty Status Badge (Google Calendar All-day chip) */}
+                            {day.isCurrentMonth && (
+                              <div
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md flex items-center justify-between border transition ${
+                                  isAvailable
+                                    ? "bg-emerald-50 text-emerald-800 border-emerald-200 group-hover:border-emerald-300"
+                                    : "bg-slate-200/80 text-slate-700 border-slate-300"
+                                }`}
+                              >
+                                {isAvailable ? (
+                                  <span className="flex items-center gap-1 truncate">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />
+                                    <span className="truncate">Available</span>
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1 truncate">
+                                    <Coffee size={9} className="text-slate-500 shrink-0" />
+                                    <span className="truncate">Off-Duty</span>
+                                  </span>
+                                )}
+                                <span className="text-[9px] text-slate-400 group-hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  Toggle
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Bookings / Trek Events (Google Calendar Event Blocks) */}
+                            <div className="space-y-1 pt-0.5">
+                              {day.dayBookings.map((b) => (
+                                <div
+                                  key={b.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedBookingRoster(b);
+                                  }}
+                                  className="px-1.5 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold truncate flex items-center gap-1 shadow-2xs transition cursor-pointer"
+                                  title={`Click to view climber roster: ${b.trails?.name || "Trek"} • ${b.group_size} pax`}
+                                >
+                                  <Compass size={10} className="text-blue-200 shrink-0" />
+                                  <span className="truncate">{b.trails?.name || "Trek"} ({b.group_size}p)</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Quick Toggle Hover Hint at bottom */}
+                          <div className="pt-1 text-[9px] font-bold text-slate-400 group-hover:text-emerald-700 text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                            Click cell to {isAvailable ? "set off-duty" : "set available"}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                /* Google Calendar Week View (7 Large Columns) */
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
+                  {currentWeekDays.map((day) => {
+                    const isAvailable = !day.isOff;
+                    return (
+                      <div
+                        key={day.dateStr}
+                        className={`relative p-4 rounded-2xl border-2 flex flex-col justify-between transition-all ${
+                          day.isToday
+                            ? "ring-2 ring-emerald-500 shadow-md "
+                            : ""
+                        } ${
                           isAvailable
-                            ? "bg-slate-200 hover:bg-rose-100 hover:text-rose-700 text-slate-700"
-                            : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                            ? "bg-emerald-50/40 border-emerald-200 hover:border-emerald-300"
+                            : "bg-slate-50 border-slate-200 hover:border-slate-300"
                         }`}
                       >
-                        {isAvailable ? "Set Off-Duty" : "Set Available"}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
+                        {/* Top Header of Card */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className={`text-xs font-black tracking-wider uppercase ${isAvailable ? "text-emerald-800" : "text-slate-500"}`}>
+                              {day.dayName}
+                            </span>
+                            {day.isToday && (
+                              <span className="px-1.5 py-0.5 bg-emerald-600 text-white rounded text-[9px] font-black uppercase tracking-wider">
+                                Today
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Date Number */}
+                          <div className="mb-3">
+                            <div className="text-2xl font-black text-slate-800 tracking-tight leading-none">
+                              {day.date.getDate()}
+                            </div>
+                            <div className="text-[11px] font-bold text-slate-400 uppercase mt-0.5">
+                              {day.date.toLocaleDateString("en-US", { month: "short" })}
+                            </div>
+                          </div>
+
+                          {/* Status Badge */}
+                          <div className="mb-3">
+                            {isAvailable ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-full text-[11px] font-bold">
+                                <CheckCircle size={12} className="text-emerald-600" /> Available
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-200 text-slate-700 border border-slate-300 rounded-full text-[11px] font-bold">
+                                <Coffee size={12} className="text-slate-500" /> Off-Duty
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Treks on this day (Google Calendar Style Chips) */}
+                          {day.dayBookings.length > 0 && (
+                            <div className="mb-3 space-y-1.5">
+                              <div className="text-[11px] font-bold text-blue-900 flex items-center gap-1">
+                                <Compass size={12} className="text-blue-600" />
+                                {day.dayBookings.length} Scheduled Trek{day.dayBookings.length === 1 ? "" : "s"}:
+                              </div>
+                              {day.dayBookings.map((b) => (
+                                <div
+                                  key={b.id}
+                                  onClick={() => setSelectedBookingRoster(b)}
+                                  className="p-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold truncate flex items-center gap-1.5 shadow-xs cursor-pointer transition"
+                                  title="Click to view climber roster"
+                                >
+                                  <Compass size={10} className="shrink-0 text-blue-200" />
+                                  <span className="truncate">{b.trails?.name || "Trail"} ({b.group_size}p)</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Interactive Toggle Button */}
+                        <button
+                          onClick={() => toggleAvailability(day.dateStr, isAvailable ? "available" : "off")}
+                          disabled={isUpdatingAvailability}
+                          className={`w-full py-2 px-3 rounded-xl font-bold text-xs transition-all disabled:opacity-50 mt-2 cursor-pointer ${
+                            isAvailable
+                              ? "bg-slate-200 hover:bg-rose-100 hover:text-rose-700 text-slate-700"
+                              : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                          }`}
+                        >
+                          {isAvailable ? "Set Off-Duty" : "Set Available"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* RECURRING WEEKLY ROUTINE TEMPLATE */}

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, Fragment } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { Link, useSearchParams, useNavigate } from "react-router-dom";
@@ -33,6 +33,7 @@ import {
   ShieldCheck,
   FileText,
   ChevronRight,
+  ChevronLeft,
   Menu,
   X,
   ChevronDown,
@@ -52,7 +53,9 @@ import {
   Building2,
   Globe,
   Radio,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ScanText,
+  Sparkles
 } from "lucide-react";
 
 import AdminGuides from "./AdminGuides";
@@ -63,6 +66,7 @@ import { AnnouncementManager } from "@/components/admin/AnnouncementManager";
 import { AdminAnalytics } from "@/components/admin/AdminAnalytics";
 import { ReviewsManager } from "@/components/admin/ReviewsManager";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { OcrInspectionModal } from "@/components/OcrInspectionModal";
 import { NNNP_TRAILS_METADATA } from "@/lib/trailData";
 import {
   getBookingParticipants,
@@ -90,6 +94,7 @@ type Booking = {
   valid_id_url: string | null;
   waiver_url: string | null;
   medical_cert_url: string | null;
+  admin_notes?: string | null;
   created_at: string;
   profiles: {
     full_name: string | null;
@@ -147,7 +152,6 @@ export type TabType =
   | "users"
   | "trails"
   | "bookings"
-  | "permits"
   | "guides"
   | "navigation"
   | "advisories"
@@ -171,6 +175,114 @@ const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
+// Reusable Pagination Controls
+const PaginationControls = ({
+  currentPage,
+  totalPages,
+  onPageChange,
+  totalItems,
+  pageSize,
+  onPageSizeChange,
+  itemName = "items",
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems?: number;
+  pageSize?: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange?: (size: number) => void;
+  itemName?: string;
+}) => {
+  if (totalPages <= 1 && (!totalItems || totalItems === 0)) return null;
+
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 py-4 px-2 text-xs text-slate-600 border-t border-slate-100 mt-2">
+      {/* Page Limiter Dropdown & Range Info (Centered) */}
+      {totalItems !== undefined && pageSize !== undefined && onPageSizeChange && (
+        <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-slate-600">
+          <span>Show</span>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              onPageSizeChange(Number(e.target.value));
+              onPageChange(1);
+            }}
+            aria-label={`${itemName} per page`}
+            className="px-2.5 py-0.5 bg-white border-2 border-emerald-500 rounded-full text-xs font-bold text-slate-800 shadow-xs focus:outline-hidden cursor-pointer"
+          >
+            <option value={5}>5</option>
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+          </select>
+          <span>{itemName} per page</span>
+          <span className="text-slate-300 mx-1">|</span>
+          <span>
+            Showing{" "}
+            <strong className="text-slate-900 font-bold">
+              {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1}
+            </strong>{" "}
+            to{" "}
+            <strong className="text-slate-900 font-bold">
+              {Math.min(currentPage * pageSize, totalItems)}
+            </strong>{" "}
+            of <strong className="text-slate-900 font-bold">{totalItems}</strong>
+          </span>
+        </div>
+      )}
+
+      {/* Page navigation buttons (Centered) */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-1">
+          <button
+            onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+            disabled={currentPage <= 1}
+            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+            title="Previous page"
+          >
+            <ChevronLeft size={15} />
+          </button>
+
+          {Array.from({ length: totalPages }, (_, i) => i + 1)
+            .filter((page) => {
+              if (totalPages <= 5) return true;
+              if (page === 1 || page === totalPages) return true;
+              return Math.abs(page - currentPage) <= 1;
+            })
+            .map((page, idx, arr) => {
+              const prev = arr[idx - 1];
+              const hasGap = prev && page - prev > 1;
+              return (
+                <Fragment key={page}>
+                  {hasGap && <span className="px-1 text-slate-400">...</span>}
+                  <button
+                    onClick={() => onPageChange(page)}
+                    className={`w-7 h-7 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      currentPage === page
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "border border-slate-200 text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                </Fragment>
+              );
+            })}
+
+          <button
+            onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+            disabled={currentPage >= totalPages}
+            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+            title="Next page"
+          >
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function Admin() {
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
@@ -179,8 +291,11 @@ export default function Admin() {
   // Active Tab state
   const tabParam = searchParams.get("tab") as TabType | null;
   const [activeTab, setActiveTab] = useState<TabType>(() => {
+    if ((tabParam as string) === "permits") {
+      return "bookings";
+    }
     if (tabParam && [
-      "dashboard", "users", "trails", "bookings", "permits",
+      "dashboard", "users", "trails", "bookings",
       "guides", "navigation", "advisories", "faq", "notifications",
       "reports", "settings"
     ].includes(tabParam)) {
@@ -192,6 +307,13 @@ export default function Admin() {
     }
     return "dashboard";
   });
+
+  useEffect(() => {
+    if (searchParams.get("tab") === "permits") {
+      setSearchParams({ tab: "bookings" }, { replace: true });
+      setActiveTab("bookings");
+    }
+  }, [searchParams, setSearchParams]);
 
   const [reportsSubTab, setReportsSubTab] = useState<"analytics" | "heatmap" | "incidents" | "schedules" | "reviews">(() => {
     if (["incidents", "heatmap", "analytics", "schedules", "reviews"].includes(tabParam as any)) {
@@ -224,6 +346,60 @@ export default function Admin() {
   const [newUserRole, setNewUserRole] = useState<string>("trekker");
   const [deletingUser, setDeletingUser] = useState<UserProfile | null>(null);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
+
+  // Tesseract OCR Inspection Modal state
+  const [adminOcrModal, setAdminOcrModal] = useState<{
+    isOpen: boolean;
+    url: string | null;
+    title: string;
+    expectedName?: string;
+    bookingId?: string;
+  } | null>(null);
+
+  const handleSaveOcrToDatabase = async (bookingId: string, ocrData: any) => {
+    try {
+      const stamp = `[Tesseract OCR Verified by Admin at ${new Date().toLocaleString()}]: ${ocrData.detectedIdType || "Document"} verified (${ocrData.confidence}% confidence, Name: ${ocrData.detectedName || "N/A"})`;
+
+      const target = bookings.find((b) => b.id === bookingId);
+      const existingNotes = target?.admin_notes ? `${target.admin_notes} | ${stamp}` : stamp;
+
+      const { error } = await supabase
+        .from("bookings")
+        .update({ admin_notes: existingNotes })
+        .eq("id", bookingId);
+
+      if (error) throw error;
+
+      setBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? { ...b, admin_notes: existingNotes } : b))
+      );
+      if (selectedRosterBooking && selectedRosterBooking.id === bookingId) {
+        setSelectedRosterBooking((prev) => (prev ? { ...prev, admin_notes: existingNotes } : null));
+      }
+      toast.success("OCR verification logged and stored in database!");
+    } catch (err: any) {
+      console.error("Failed to store OCR verification:", err);
+      toast.error("Failed to save OCR verification to database.");
+    }
+  };
+
+  // Helper to accurately extract Participant 1's name, falling back to profile name
+  const getFirstParticipantName = (booking: any): string => {
+    if (!booking) return "Lead Climber";
+    const paxList = getBookingParticipants(booking);
+    if (paxList && paxList.length > 0) {
+      const first = paxList[0] as any;
+      const name = first.fullName || first.name || first.full_name;
+      if (name && typeof name === "string" && name.trim()) return name.trim();
+    }
+    if (booking.notes && typeof booking.notes === "string") {
+      const match = booking.notes.match(/(?:^|\n)\s*1\.\s*([^|\n\r]+?)(?:\s*\||\s*$)/m);
+      if (match && match[1]?.trim()) {
+        return match[1].trim();
+      }
+    }
+    return booking.profiles?.full_name || "Lead Climber";
+  };
   const [editingTrail, setEditingTrail] = useState<TrailRecord | null>(null);
   const [deletingTrail, setDeletingTrail] = useState<TrailRecord | null>(null);
   const [isDeletingTrail, setIsDeletingTrail] = useState(false);
@@ -242,10 +418,18 @@ export default function Admin() {
   const [bookingSearch, setBookingSearch] = useState("");
   const [bookingStatusFilter, setBookingStatusFilter] = useState<string>("all");
   const [bookingTrailFilter, setBookingTrailFilter] = useState<string>("all");
+  const [bookingPage, setBookingPage] = useState(1);
+  const [bookingPageLimit, setBookingPageLimit] = useState(5);
+
+  // Notifications tab pagination & limiter
+  const [notificationPage, setNotificationPage] = useState(1);
+  const [notificationPageLimit, setNotificationPageLimit] = useState(5);
 
   // Users tab filters & search
   const [userSearch, setUserSearch] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState<string>("all");
+  const [userPage, setUserPage] = useState(1);
+  const [userPageLimit, setUserPageLimit] = useState(5);
 
   // FAQs state
   const [faqs, setFaqs] = useState([
@@ -455,14 +639,34 @@ export default function Admin() {
   const availableGuides = guidesList.filter((g) => g.is_available !== false).length;
   const pendingGuideApps = usersList.filter((u) => u.guide_application_status === "pending").length;
 
+  // Rejection reason modal state
+  const [rejectingBookingId, setRejectingBookingId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [isRejecting, setIsRejecting] = useState(false);
+
+  const REJECTION_PRESETS = [
+    "Incomplete or invalid documents submitted.",
+    "Trail is at full capacity for the selected date.",
+    "Medical certificate does not meet park requirements.",
+    "Waiver is missing required signatures.",
+    "Trekker does not meet the minimum age requirement.",
+    "Selected trail is temporarily closed for maintenance.",
+    "Emergency contact information is incomplete.",
+    "Group size exceeds the allowed limit for this trail.",
+  ];
+
   // Booking status updater
-  const updateBookingStatus = async (id: string, status: BookingStatus) => {
+  const updateBookingStatus = async (id: string, status: BookingStatus, reason?: string) => {
     try {
       const target = bookings.find((b) => b.id === id);
-      const { error } = await supabase.from("bookings").update({ status }).eq("id", id);
+      const updatePayload: any = { status };
+      if (status === "rejected" && reason) {
+        updatePayload.admin_notes = reason;
+      }
+      const { error } = await supabase.from("bookings").update(updatePayload).eq("id", id);
       if (error) throw error;
 
-      setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status } : b)));
+      setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status, ...(reason && { admin_notes: reason }) } : b)));
 
       if (status === "approved" && target?.user_id) {
         const refNo = target.permit_number || `NNNP-${new Date().getFullYear()}-${id.slice(0, 6).toUpperCase()}`;
@@ -484,20 +688,37 @@ export default function Admin() {
 
         toast.success("Booking approved & permit issued! Trekker has been notified.");
       } else if (status === "rejected" && target?.user_id) {
+        const reasonText = reason ? ` Reason: ${reason}` : "";
         await supabase.from("notifications").insert({
           user_id: target.user_id,
-          title: "Trekking Booking Not Approved",
-          message: `Your booking request for ${target.trails?.name || "Trail"} on ${target.climb_date} could not be approved at this time.`,
+          title: "❌ Booking Rejected by Park Administration",
+          message: `Your booking request for ${target.trails?.name || "Trail"} on ${target.climb_date} has been rejected.${reasonText} Please check your My Bookings page for details.`,
           type: "booking_rejected",
           read: false,
           link: "/my-bookings",
           entity_id: id,
         });
-        toast.info("Booking marked as rejected.");
+        toast.info("Booking rejected. Trekker has been notified with the reason.");
       }
     } catch (err: any) {
       toast.error("Failed to update status: " + err.message);
     }
+  };
+
+  // Handle reject button click — open modal
+  const handleRejectClick = (bookingId: string) => {
+    setRejectingBookingId(bookingId);
+    setRejectionReason("");
+  };
+
+  // Confirm rejection with reason
+  const handleConfirmReject = async () => {
+    if (!rejectingBookingId) return;
+    setIsRejecting(true);
+    await updateBookingStatus(rejectingBookingId, "rejected", rejectionReason);
+    setIsRejecting(false);
+    setRejectingBookingId(null);
+    setRejectionReason("");
   };
 
   // Manual Guide Assignment
@@ -637,7 +858,7 @@ export default function Admin() {
       toast.success(`Trail "${payload.name}" updated successfully!`);
       try {
         localStorage.removeItem("nnnp_trails");
-      } catch {}
+      } catch { }
 
       setTrailsList((prev) =>
         prev.map((t) => (t.id === editingTrail.id ? { ...t, ...payload } : t))
@@ -675,7 +896,7 @@ export default function Admin() {
       toast.success(`Trail "${payload.name}" added successfully!`);
       try {
         localStorage.removeItem("nnnp_trails");
-      } catch {}
+      } catch { }
 
       if (data) {
         setTrailsList((prev) => [...prev, data as unknown as TrailRecord]);
@@ -746,16 +967,16 @@ export default function Admin() {
       // b. Delete schedules, reviews, announcements, and incident reports referencing this trail
       try {
         await (supabase.from as any)("trekking_schedules").delete().eq("trail_id", trailId);
-      } catch {}
+      } catch { }
       try {
         await (supabase.from as any)("ratings_reviews").delete().eq("trail_id", trailId);
-      } catch {}
+      } catch { }
       try {
         await (supabase.from as any)("announcements").delete().eq("trail_id", trailId);
-      } catch {}
+      } catch { }
       try {
         await (supabase.from as any)("incident_reports").update({ trail_id: null }).eq("trail_id", trailId);
-      } catch {}
+      } catch { }
 
       // 2. Delete trail record cleanly
       const { error } = await supabase.from("trails").delete().eq("id", trailId);
@@ -781,7 +1002,7 @@ export default function Admin() {
 
       try {
         localStorage.removeItem("nnnp_trails");
-      } catch {}
+      } catch { }
       setTrailsList((prev) => prev.filter((t) => t.id !== trailId));
       setDeletingTrail(null);
     } catch (err: any) {
@@ -796,7 +1017,7 @@ export default function Admin() {
     return bookings.filter((b) => {
       // Global navbar search or tab search
       const q = (bookingSearch || navbarSearch).toLowerCase().trim();
-      const trekkerName = (b.profiles?.full_name || "").toLowerCase();
+      const trekkerName = getFirstParticipantName(b).toLowerCase();
       const trekkerEmail = (b.profiles?.email || "").toLowerCase();
       const permitNo = (b.permit_number || "").toLowerCase();
       const trailName = (b.trails?.name || "").toLowerCase();
@@ -820,6 +1041,31 @@ export default function Admin() {
     });
   }, [bookings, bookingSearch, navbarSearch, bookingStatusFilter, bookingTrailFilter]);
 
+  // Paginated Bookings
+  const paginatedBookings = useMemo(() => {
+    const start = (bookingPage - 1) * bookingPageLimit;
+    return filteredBookings.slice(start, start + bookingPageLimit);
+  }, [filteredBookings, bookingPage, bookingPageLimit]);
+
+  const totalBookingPages = Math.ceil(filteredBookings.length / bookingPageLimit) || 1;
+
+  // Paginated Notifications
+  const paginatedNotifications = useMemo(() => {
+    const start = (notificationPage - 1) * notificationPageLimit;
+    return notificationsList.slice(start, start + notificationPageLimit);
+  }, [notificationsList, notificationPage, notificationPageLimit]);
+
+  const totalNotificationPages = Math.ceil(notificationsList.length / notificationPageLimit) || 1;
+
+  // Reset page when filters change
+  useEffect(() => {
+    setBookingPage(1);
+  }, [bookingSearch, bookingStatusFilter, bookingTrailFilter, bookingPageLimit]);
+
+  useEffect(() => {
+    setNotificationPage(1);
+  }, [notificationPageLimit]);
+
   // Filtered Users
   const filteredUsers = useMemo(() => {
     return usersList.filter((u) => {
@@ -833,6 +1079,18 @@ export default function Admin() {
     });
   }, [usersList, userSearch, userRoleFilter]);
 
+  // Paginated Users
+  const paginatedUsers = useMemo(() => {
+    const start = (userPage - 1) * userPageLimit;
+    return filteredUsers.slice(start, start + userPageLimit);
+  }, [filteredUsers, userPage, userPageLimit]);
+
+  const totalUserPages = Math.ceil(filteredUsers.length / userPageLimit) || 1;
+
+  useEffect(() => {
+    setUserPage(1);
+  }, [userSearch, userRoleFilter, userPageLimit]);
+
   // Sidebar navigation menu items
   const SIDEBAR_ITEMS: {
     group: string;
@@ -844,50 +1102,48 @@ export default function Admin() {
       badgeColor?: string;
     }[];
   }[] = [
-    {
-      group: "MAIN",
-      items: [
-        { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-      ],
-    },
-    {
-      group: "OPERATIONS",
-      items: [
-        { id: "users", label: "User Management", icon: Users, badge: totalUsers },
-        { id: "trails", label: "Trekking Trail Management", icon: Mountain, badge: totalTrails },
-        { id: "bookings", label: "Booking Management", icon: CalendarCheck, badge: pendingBookings > 0 ? pendingBookings : undefined, badgeColor: "bg-amber-500" },
-        { id: "permits", label: "Permit & Document Verification", icon: FileCheck, badge: pendingPermits > 0 ? pendingPermits : undefined, badgeColor: "bg-emerald-500" },
-        { id: "guides", label: "Guide Management", icon: Compass, badge: pendingGuideApps > 0 ? pendingGuideApps : undefined, badgeColor: "bg-red-500" },
-      ],
-    },
-    {
-      group: "CONTENT & NAVIGATION",
-      items: [
-        { id: "navigation", label: "Maps and Directions", icon: MapPin },
-        { id: "advisories", label: "Advisories Management", icon: Megaphone },
-        { id: "faq", label: "FAQ Management", icon: HelpCircle },
-      ],
-    },
-    {
-      group: "INSIGHTS & SYSTEM",
-      items: [
-        { id: "notifications", label: "Notifications", icon: BellRing, badge: notificationsList.filter(n => !n.read).length || undefined, badgeColor: "bg-red-500" },
-        { id: "reports", label: "Reports and Activity Logs", icon: BarChart3 },
-        { id: "settings", label: "Account Settings", icon: Settings },
-      ],
-    },
-  ];
+      {
+        group: "MAIN",
+        items: [
+          { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+        ],
+      },
+      {
+        group: "OPERATIONS",
+        items: [
+          { id: "users", label: "User Management", icon: Users, badge: totalUsers },
+          { id: "trails", label: "Trekking Trail Management", icon: Mountain, badge: totalTrails },
+          { id: "bookings", label: "Booking Management", icon: CalendarCheck, badge: pendingBookings > 0 ? pendingBookings : undefined, badgeColor: "bg-amber-500" },
+          { id: "guides", label: "Guide Management", icon: Compass, badge: pendingGuideApps > 0 ? pendingGuideApps : undefined, badgeColor: "bg-red-500" },
+        ],
+      },
+      {
+        group: "CONTENT & NAVIGATION",
+        items: [
+          { id: "navigation", label: "Maps and Directions", icon: MapPin },
+          { id: "advisories", label: "Advisories Management", icon: Megaphone },
+          { id: "faq", label: "FAQ Management", icon: HelpCircle },
+        ],
+      },
+      {
+        group: "INSIGHTS & SYSTEM",
+        items: [
+          { id: "notifications", label: "Notifications", icon: BellRing, badge: notificationsList.filter(n => !n.read).length || undefined, badgeColor: "bg-red-500" },
+          { id: "reports", label: "Reports and Activity Logs", icon: BarChart3 },
+          { id: "settings", label: "Account Settings", icon: Settings },
+        ],
+      },
+    ];
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-800 font-sans">
-      
+
       {/* ======================================================== */}
       {/* 1. LEFT SIDEBAR (Desktop & Mobile Drawer)                 */}
       {/* ======================================================== */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-emerald-950 text-white flex flex-col transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${
-          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-emerald-950 text-white flex flex-col transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
       >
         {/* Brand Header */}
         <div className="p-5 border-b border-emerald-900/80 flex items-center justify-between">
@@ -941,11 +1197,10 @@ export default function Admin() {
                   <button
                     key={item.id}
                     onClick={() => handleTabChange(item.id)}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold transition-all text-left ${
-                      isActive
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold transition-all text-left ${isActive
                         ? "bg-emerald-600 text-white shadow-sm shadow-emerald-900"
                         : "text-emerald-100/80 hover:bg-emerald-900/70 hover:text-white"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : "text-emerald-400"}`} />
@@ -953,9 +1208,8 @@ export default function Admin() {
                     </div>
                     {item.badge !== undefined && (
                       <span
-                        className={`text-[10px] font-black px-2 py-0.5 rounded-full text-white shrink-0 ${
-                          item.badgeColor || (isActive ? "bg-emerald-800" : "bg-emerald-900")
-                        }`}
+                        className={`text-[10px] font-black px-2 py-0.5 rounded-full text-white shrink-0 ${item.badgeColor || (isActive ? "bg-emerald-800" : "bg-emerald-900")
+                          }`}
                       >
                         {item.badge}
                       </span>
@@ -997,7 +1251,7 @@ export default function Admin() {
       {/* 2. MAIN VIEWPORT (TOP NAVBAR + DASHBOARD CONTENT)        */}
       {/* ======================================================== */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        
+
         {/* TOP NAVIGATION BAR */}
         <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between shrink-0 shadow-xs z-10">
           <div className="flex items-center gap-3">
@@ -1088,7 +1342,7 @@ export default function Admin() {
         {/* 3. DYNAMIC CONTENT AREA BASED ON ACTIVE TAB              */}
         {/* ======================================================== */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
-          
+
           {/* TAB 1: DASHBOARD OVERVIEW */}
           {activeTab === "dashboard" && (
             <div className="space-y-6">
@@ -1164,17 +1418,17 @@ export default function Admin() {
                   <span className="text-[10px] text-emerald-600 font-bold">Permits Issued</span>
                 </div>
 
-                {/* 5. Pending Permits */}
+                {/* 5. Pending Bookings */}
                 <div
-                  onClick={() => handleTabChange("permits")}
+                  onClick={() => handleTabChange("bookings")}
                   className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs hover:border-emerald-500 hover:shadow-md transition cursor-pointer"
                 >
                   <div className="flex items-center justify-between text-slate-400 mb-2">
-                    <span className="text-[11px] font-bold uppercase text-slate-500">Pending Permits</span>
+                    <span className="text-[11px] font-bold uppercase text-slate-500">Pending Bookings</span>
                     <div className="p-2 bg-purple-50 text-purple-600 rounded-xl"><FileCheck size={16} /></div>
                   </div>
-                  <p className="text-2xl font-black text-purple-700">{pendingPermits}</p>
-                  <span className="text-[10px] text-slate-400">Document Verification</span>
+                  <p className="text-2xl font-black text-purple-700">{pendingBookings}</p>
+                  <span className="text-[10px] text-slate-400">Needs Review</span>
                 </div>
 
                 {/* 6. Available Guides */}
@@ -1198,10 +1452,10 @@ export default function Admin() {
                 </span>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <button
-                    onClick={() => handleTabChange("permits")}
+                    onClick={() => handleTabChange("bookings")}
                     className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl border border-emerald-200 transition"
                   >
-                    Verify Pending Permits ({pendingPermits})
+                    Review Pending Bookings ({pendingBookings})
                   </button>
                   <button
                     onClick={() => handleTabChange("users")}
@@ -1259,7 +1513,7 @@ export default function Admin() {
                         {bookings.slice(0, 6).map((b) => (
                           <tr key={b.id} className="hover:bg-slate-50/80 transition">
                             <td className="py-3 px-3">
-                              <span className="font-bold text-slate-900 block">{b.profiles?.full_name || "Lead Climber"}</span>
+                              <span className="font-bold text-slate-900 block">{getFirstParticipantName(b)}</span>
                               <span className="text-[10px] text-slate-400 font-mono">{b.permit_number || b.id.slice(0, 8)}</span>
                             </td>
                             <td className="py-3 px-3">
@@ -1324,7 +1578,7 @@ export default function Admin() {
                                   <Check size={14} />
                                 </button>
                                 <button
-                                  onClick={() => updateBookingStatus(b.id, "rejected")}
+                                  onClick={() => handleRejectClick(b.id)}
                                   className="p-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition"
                                   title="Reject"
                                 >
@@ -1377,35 +1631,35 @@ export default function Admin() {
                   <p className="text-xs text-slate-500">Manage registered user accounts, assign roles, and inspect climber profiles</p>
                 </div>
 
-              {/* ⚠️ Email setup banner — shown when RPC not yet applied */}
-              {!emailsAvailable && (
-                <div className="w-full mt-3 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-amber-900">Emails not showing — one-time DB setup required</p>
-                    <p className="text-[11px] text-amber-700 mt-0.5">
-                      Run <code className="bg-amber-100 px-1 rounded font-mono">fix_emails_rpc.sql</code> in your{" "}
-                      <a
-                        href="https://supabase.com/dashboard/project/kmmgtcyegvbrgsdbdtsh/sql/new"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline font-bold text-amber-800 hover:text-amber-900"
-                      >
-                        Supabase SQL Editor ↗
-                      </a>{" "}
-                      to enable the <code className="bg-amber-100 px-1 rounded font-mono">get_profiles_with_email</code> function.
-                    </p>
+                {/* ⚠️ Email setup banner — shown when RPC not yet applied */}
+                {!emailsAvailable && (
+                  <div className="w-full mt-3 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-amber-900">Emails not showing — one-time DB setup required</p>
+                      <p className="text-[11px] text-amber-700 mt-0.5">
+                        Run <code className="bg-amber-100 px-1 rounded font-mono">fix_emails_rpc.sql</code> in your{" "}
+                        <a
+                          href="https://supabase.com/dashboard/project/kmmgtcyegvbrgsdbdtsh/sql/new"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline font-bold text-amber-800 hover:text-amber-900"
+                        >
+                          Supabase SQL Editor ↗
+                        </a>{" "}
+                        to enable the <code className="bg-amber-100 px-1 rounded font-mono">get_profiles_with_email</code> function.
+                      </p>
+                    </div>
+                    <a
+                      href="https://supabase.com/dashboard/project/kmmgtcyegvbrgsdbdtsh/sql/new"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold rounded-xl transition shrink-0"
+                    >
+                      Open SQL Editor
+                    </a>
                   </div>
-                  <a
-                    href="https://supabase.com/dashboard/project/kmmgtcyegvbrgsdbdtsh/sql/new"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold rounded-xl transition shrink-0"
-                  >
-                    Open SQL Editor
-                  </a>
-                </div>
-              )}
+                )}
 
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="relative">
@@ -1444,7 +1698,7 @@ export default function Admin() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredUsers.map((u) => (
+                    {paginatedUsers.map((u) => (
                       <tr key={u.id} className="hover:bg-slate-50/80 transition">
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2.5">
@@ -1459,13 +1713,12 @@ export default function Admin() {
                         <td className="py-3.5 px-4 text-slate-600">{u.nationality || "Filipino"}</td>
                         <td className="py-3.5 px-4">
                           <span
-                            className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] uppercase border ${
-                              u.role === "admin"
+                            className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] uppercase border ${u.role === "admin"
                                 ? "bg-red-100 text-red-800 border-red-200"
                                 : u.role === "guide"
-                                ? "bg-amber-100 text-amber-800 border-amber-200"
-                                : "bg-emerald-100 text-emerald-800 border-emerald-200"
-                            }`}
+                                  ? "bg-amber-100 text-amber-800 border-amber-200"
+                                  : "bg-emerald-100 text-emerald-800 border-emerald-200"
+                              }`}
                           >
                             {u.role}
                           </span>
@@ -1497,6 +1750,17 @@ export default function Admin() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Page Limiter & Pagination Controls */}
+              <PaginationControls
+                currentPage={userPage}
+                totalPages={totalUserPages}
+                totalItems={filteredUsers.length}
+                pageSize={userPageLimit}
+                onPageChange={setUserPage}
+                onPageSizeChange={setUserPageLimit}
+                itemName="users"
+              />
             </div>
           )}
 
@@ -1596,7 +1860,7 @@ export default function Admin() {
                   <h2 className="text-lg font-bold text-slate-900">Trekking Booking Management</h2>
                   <p className="text-xs text-slate-500">Review climber submissions, approve permits, and assign accredited tour guides</p>
                 </div>
-                
+
                 {/* Search & Filters */}
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="relative">
@@ -1637,12 +1901,17 @@ export default function Admin() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredBookings.map((b) => (
+                    {paginatedBookings.map((b) => (
                       <tr key={b.id} className="hover:bg-slate-50/80 transition">
                         <td className="py-3.5 px-4">
-                          <span className="font-bold text-slate-900 block">{b.profiles?.full_name || "Lead Climber"}</span>
+                          <span className="font-bold text-slate-900 block">{getFirstParticipantName(b)}</span>
                           <span className="text-[10px] text-emerald-700 font-mono font-bold block">{b.permit_number || `REF-${b.id.slice(0, 8).toUpperCase()}`}</span>
-                          <span className="text-[10px] text-slate-400">{b.profiles?.phone || b.emergency_contact_phone || "No phone"}</span>
+                          <span className="text-[10px] text-slate-400 block">{b.profiles?.phone || b.emergency_contact_phone || "No phone"}</span>
+                          {(b.admin_notes?.includes("OCR") || b.notes?.includes("OCR")) && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full mt-1">
+                              <Sparkles size={9} className="text-emerald-600" /> OCR Verified
+                            </span>
+                          )}
                         </td>
                         <td className="py-3.5 px-4">
                           <span className="font-semibold text-slate-900 block">{b.trails?.name}</span>
@@ -1687,7 +1956,7 @@ export default function Admin() {
                                 Approve
                               </button>
                               <button
-                                onClick={() => updateBookingStatus(b.id, "rejected")}
+                                onClick={() => handleRejectClick(b.id)}
                                 className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-lg text-[11px] transition"
                               >
                                 Reject
@@ -1706,85 +1975,21 @@ export default function Admin() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Page Limiter & Pagination Controls */}
+              <PaginationControls
+                currentPage={bookingPage}
+                totalPages={totalBookingPages}
+                totalItems={filteredBookings.length}
+                pageSize={bookingPageLimit}
+                onPageChange={setBookingPage}
+                onPageSizeChange={setBookingPageLimit}
+                itemName="bookings"
+              />
             </div>
           )}
 
-          {/* TAB 5: PERMIT & DOCUMENT VERIFICATION */}
-          {activeTab === "permits" && (
-            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-6">
-              <div className="border-b pb-4">
-                <h2 className="text-lg font-bold text-slate-900">Permit & Document Verification Queue</h2>
-                <p className="text-xs text-slate-500">Inspect uploaded government IDs, waivers, and medical certificates before granting trekking permits</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {bookings.filter(b => b.status === "pending" || !b.permit_number).map((b) => (
-                  <div key={b.id} className="border border-slate-200 rounded-2xl p-5 space-y-4 hover:shadow-md transition bg-slate-50/50">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <span className="font-bold text-slate-900 text-sm block">{b.profiles?.full_name || "Lead Climber"}</span>
-                        <span className="text-xs text-slate-500">{b.trails?.name} • {b.climb_date}</span>
-                      </div>
-                      <StatusBadge status={b.status} />
-                    </div>
-
-                    {/* Requirements checklist */}
-                    <div className="space-y-2 pt-1 border-t text-xs">
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-white border">
-                        <span className="font-semibold text-slate-700">Government Valid ID</span>
-                        {b.valid_id_url ? (
-                          <a href={b.valid_id_url} target="_blank" rel="noreferrer" className="text-emerald-700 font-bold hover:underline flex items-center gap-1">
-                            <Eye size={12} /> Inspect
-                          </a>
-                        ) : (
-                          <span className="text-red-500 font-semibold">Missing</span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-white border">
-                        <span className="font-semibold text-slate-700">Signed NNNP Waiver</span>
-                        {b.waiver_url ? (
-                          <a href={b.waiver_url} target="_blank" rel="noreferrer" className="text-emerald-700 font-bold hover:underline flex items-center gap-1">
-                            <Eye size={12} /> Inspect
-                          </a>
-                        ) : (
-                          <span className="text-red-500 font-semibold">Missing</span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-white border">
-                        <span className="font-semibold text-slate-700">Medical Certificate</span>
-                        {b.medical_cert_url ? (
-                          <a href={b.medical_cert_url} target="_blank" rel="noreferrer" className="text-emerald-700 font-bold hover:underline flex items-center gap-1">
-                            <Eye size={12} /> Inspect
-                          </a>
-                        ) : (
-                          <span className="text-red-500 font-semibold">Missing</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="pt-2 flex gap-2">
-                      <button
-                        onClick={() => updateBookingStatus(b.id, "approved")}
-                        className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition"
-                      >
-                        Approve & Issue Permit
-                      </button>
-                      <button
-                        onClick={() => updateBookingStatus(b.id, "rejected")}
-                        className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-xl text-xs transition"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 6: GUIDE MANAGEMENT (Embeds full AdminGuides) */}
+          {/* TAB 5: GUIDE MANAGEMENT (Embeds full AdminGuides) */}
           {activeTab === "guides" && (
             <div className="space-y-4">
               <AdminGuides />
@@ -1902,7 +2107,7 @@ export default function Admin() {
               </div>
 
               <div className="divide-y divide-slate-100">
-                {notificationsList.map((n) => (
+                {paginatedNotifications.map((n) => (
                   <div key={n.id} className={`py-3.5 flex items-start justify-between gap-4 text-xs ${n.read ? "opacity-75" : "bg-emerald-50/30 p-3 rounded-2xl mb-1"}`}>
                     <div className="flex items-start gap-3">
                       <div className="p-2 rounded-xl bg-emerald-100 text-emerald-800 shrink-0 mt-0.5">
@@ -1919,6 +2124,17 @@ export default function Admin() {
                   </div>
                 ))}
               </div>
+
+              {/* Page Limiter & Pagination Controls */}
+              <PaginationControls
+                currentPage={notificationPage}
+                totalPages={totalNotificationPages}
+                totalItems={notificationsList.length}
+                pageSize={notificationPageLimit}
+                onPageChange={setNotificationPage}
+                onPageSizeChange={setNotificationPageLimit}
+                itemName="alerts"
+              />
             </div>
           )}
 
@@ -2051,7 +2267,7 @@ export default function Admin() {
             <div className="space-y-4 my-2 text-xs">
               <div className="bg-slate-50 p-3 rounded-xl border space-y-1">
                 <p><strong>Permit Ref:</strong> {selectedRosterBooking.permit_number || selectedRosterBooking.id}</p>
-                <p><strong>Lead Trekker:</strong> {selectedRosterBooking.profiles?.full_name}</p>
+                <p><strong>Lead Trekker:</strong> {getFirstParticipantName(selectedRosterBooking)}</p>
                 <p><strong>Emergency Contact:</strong> {selectedRosterBooking.emergency_contact_name} ({selectedRosterBooking.emergency_contact_phone})</p>
                 <p><strong>Total Climbers:</strong> {selectedRosterBooking.group_size} Pax</p>
               </div>
@@ -2060,15 +2276,108 @@ export default function Admin() {
                 <h4 className="font-bold text-slate-800 mb-2 uppercase text-[11px]">Registered Group Members:</h4>
                 <div className="divide-y border rounded-xl overflow-hidden max-h-48 overflow-y-auto">
                   {getBookingParticipants(selectedRosterBooking)?.map((p, idx) => (
-                    <div key={idx} className="p-2.5 flex items-center justify-between bg-white text-xs">
-                      <span className="font-semibold text-slate-800">{idx + 1}. {p.fullName}</span>
-                      <span className="text-slate-500 text-[11px]">{p.age ? `${p.age} yrs` : ""} • {p.contactNumber || "No phone"}</span>
+                    <div key={idx} className="p-2.5 flex flex-col gap-1.5 bg-white text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-slate-800">{idx + 1}. {p.fullName}</span>
+                        <span className="text-slate-500 text-[11px]">{p.age ? `${p.age} yrs` : ""} • {p.gender || ""} • {p.contactNumber || "No phone"}</span>
+                      </div>
+                      {p.ocrVerification?.verified && (
+                        <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] bg-emerald-50 text-emerald-800 px-2 py-1 rounded-lg border border-emerald-200">
+                          <span className="flex items-center gap-1 font-bold">
+                            <Sparkles className="w-3 h-3 text-emerald-600" />
+                            OCR Verified: {p.ocrVerification.detectedIdType || "Govt ID"} ({p.ocrVerification.confidence}% match)
+                          </span>
+                          {p.ocrVerification.detectedName && (
+                            <span className="text-emerald-700 font-medium">
+                              Detected: &ldquo;{p.ocrVerification.detectedName}&rdquo;
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )) || (
-                    <div className="p-3 text-slate-400 italic">No individual participant breakdown recorded.</div>
-                  )}
+                      <div className="p-3 text-slate-400 italic">No individual participant breakdown recorded.</div>
+                    )}
                 </div>
               </div>
+
+              {/* Uploaded Documents */}
+              {(selectedRosterBooking.valid_id_url || selectedRosterBooking.waiver_url || selectedRosterBooking.medical_cert_url) && (
+                <div className="pt-2 border-t">
+                  <h4 className="font-bold text-slate-800 mb-2 uppercase text-[11px]">Uploaded Documents:</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {selectedRosterBooking.valid_id_url && (
+                      <div className="p-2.5 border rounded-xl bg-slate-50 flex items-center justify-between">
+                        <span className="font-semibold text-[11px] text-slate-700">Valid ID</span>
+                        <div className="flex items-center gap-1.5">
+                          <a href={selectedRosterBooking.valid_id_url} target="_blank" rel="noreferrer" className="text-emerald-700 font-bold hover:underline flex items-center gap-0.5 text-[10px]">
+                            <Eye size={11} /> View
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setAdminOcrModal({
+                              isOpen: true,
+                              url: selectedRosterBooking.valid_id_url,
+                              title: `Valid ID: ${selectedRosterBooking.profiles?.full_name || "Lead Trekker"}`,
+                              expectedName: selectedRosterBooking.profiles?.full_name || undefined,
+                              bookingId: selectedRosterBooking.id,
+                            })}
+                            className="text-emerald-800 font-bold bg-emerald-100 hover:bg-emerald-200 px-1.5 py-0.5 rounded text-[10px] flex items-center gap-0.5"
+                          >
+                            <ScanText size={10} /> OCR
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {selectedRosterBooking.waiver_url && (
+                      <div className="p-2.5 border rounded-xl bg-slate-50 flex items-center justify-between">
+                        <span className="font-semibold text-[11px] text-slate-700">Waiver</span>
+                        <div className="flex items-center gap-1.5">
+                          <a href={selectedRosterBooking.waiver_url} target="_blank" rel="noreferrer" className="text-emerald-700 font-bold hover:underline flex items-center gap-0.5 text-[10px]">
+                            <Eye size={11} /> View
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setAdminOcrModal({
+                              isOpen: true,
+                              url: selectedRosterBooking.waiver_url,
+                              title: `Waiver: ${selectedRosterBooking.profiles?.full_name || "Lead Trekker"}`,
+                              expectedName: selectedRosterBooking.profiles?.full_name || undefined,
+                              bookingId: selectedRosterBooking.id,
+                            })}
+                            className="text-emerald-800 font-bold bg-emerald-100 hover:bg-emerald-200 px-1.5 py-0.5 rounded text-[10px] flex items-center gap-0.5"
+                          >
+                            <ScanText size={10} /> OCR
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {selectedRosterBooking.medical_cert_url && (
+                      <div className="p-2.5 border rounded-xl bg-slate-50 flex items-center justify-between">
+                        <span className="font-semibold text-[11px] text-slate-700">Med Cert</span>
+                        <div className="flex items-center gap-1.5">
+                          <a href={selectedRosterBooking.medical_cert_url} target="_blank" rel="noreferrer" className="text-emerald-700 font-bold hover:underline flex items-center gap-0.5 text-[10px]">
+                            <Eye size={11} /> View
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setAdminOcrModal({
+                              isOpen: true,
+                              url: selectedRosterBooking.medical_cert_url,
+                              title: `Med Cert: ${selectedRosterBooking.profiles?.full_name || "Lead Trekker"}`,
+                              expectedName: selectedRosterBooking.profiles?.full_name || undefined,
+                              bookingId: selectedRosterBooking.id,
+                            })}
+                            className="text-emerald-800 font-bold bg-emerald-100 hover:bg-emerald-200 px-1.5 py-0.5 rounded text-[10px] flex items-center gap-0.5"
+                          >
+                            <ScanText size={10} /> OCR
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>
@@ -2623,6 +2932,87 @@ export default function Admin() {
         </Dialog>
       )}
 
+      {/* Tesseract OCR Document Review Modal */}
+      {adminOcrModal && (
+        <OcrInspectionModal
+          isOpen={adminOcrModal.isOpen}
+          onClose={() => setAdminOcrModal(null)}
+          imageSource={adminOcrModal.url}
+          documentTitle={adminOcrModal.title}
+          expectedName={adminOcrModal.expectedName}
+          onApplyExtracted={(data) => {
+            if (adminOcrModal.bookingId) {
+              handleSaveOcrToDatabase(adminOcrModal.bookingId, data);
+            }
+          }}
+        />
+      )}
+
+      {/* ── Rejection Reason Modal ── */}
+      <Dialog open={!!rejectingBookingId} onOpenChange={(open) => { if (!open) { setRejectingBookingId(null); setRejectionReason(""); } }}>
+        <DialogContent className="max-w-md bg-white rounded-3xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <XCircle className="w-5 h-5 text-red-600" /> Reject Booking
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 mt-1">
+              Select or type the reason for rejecting this booking. The trekker will be notified with this reason.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 mt-2">
+            <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">Quick Presets</p>
+            <div className="flex flex-wrap gap-2">
+              {REJECTION_PRESETS.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setRejectionReason(preset)}
+                  className={`text-[11px] px-2.5 py-1.5 rounded-xl border transition font-medium text-left ${
+                    rejectionReason === preset
+                      ? "bg-red-600 text-white border-red-600"
+                      : "bg-red-50 text-red-800 border-red-200 hover:bg-red-100"
+                  }`}
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Custom Reason</p>
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Or type a custom reason here..."
+                rows={3}
+                className="w-full border border-slate-200 rounded-xl p-3 text-xs text-slate-800 resize-none focus:outline-none focus:ring-2 focus:ring-red-300"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-2 mt-4">
+            <button
+              type="button"
+              onClick={() => { setRejectingBookingId(null); setRejectionReason(""); }}
+              className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmReject}
+              disabled={isRejecting}
+              className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-sm transition disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {isRejecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+              Reject Booking
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </div>
+
   );
 }

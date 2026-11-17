@@ -44,6 +44,7 @@ type BookingWithTrail = {
   organization: string | null;
   status: string;
   notes: string | null;
+  admin_notes?: string | null;
   valid_id_url: string | null;
   waiver_url: string | null;
   medical_cert_url: string | null;
@@ -528,6 +529,29 @@ export default function MyBookings() {
                       </div>
                     </div>
                   )}
+
+                  {b.status === "rejected" && (
+                    <div className="mt-3 p-3.5 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2.5 text-xs text-red-950">
+                      <div className="p-1 rounded-lg bg-red-100 text-red-700 shrink-0 mt-0.5">
+                        <XCircle className="w-4 h-4 text-red-600" />
+                      </div>
+                      <div className="leading-snug space-y-1">
+                        <span className="font-bold text-red-900 block text-xs uppercase tracking-wide">
+                          Booking Rejected by Park Administration
+                        </span>
+                        <p className="text-red-800 text-xs leading-relaxed">
+                          <strong className="text-red-900 font-bold">Reason for Rejection:</strong>{" "}
+                          {b.admin_notes ? (
+                            <span className="font-medium bg-white/80 px-2 py-0.5 rounded border border-red-200 text-red-900 inline-block mt-0.5">
+                              {b.admin_notes}
+                            </span>
+                          ) : (
+                            "Please review your notifications or contact the DENR NNNP Park Administration office for details."
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Right: Actions */}
@@ -762,14 +786,6 @@ export default function MyBookings() {
                     </a>
                   </div>
                 </div>
-
-                {/* Notes */}
-                {selectedBooking.notes && (
-                  <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3.5 text-xs">
-                    <span className="font-bold text-emerald-900 block mb-1">Booking Notes & Staggered Slot</span>
-                    <p className="text-gray-700">{selectedBooking.notes}</p>
-                  </div>
-                )}
               </div>
 
               {/* Footer */}

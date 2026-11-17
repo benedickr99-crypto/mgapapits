@@ -12,6 +12,7 @@ interface BookingVoucherProps {
     referenceNumber: string;
     trailName: string;
     climbDate: string;
+    descentDate?: string;
     timeSlot: string;
     groupSize: number;
     status?: string;
@@ -111,20 +112,44 @@ export const BookingVoucherModal = ({ isOpen, onClose, booking }: BookingVoucher
             <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2.5">
               <div className="flex items-center gap-2 text-gray-500 text-xs font-semibold uppercase">
                 <Calendar className="w-4 h-4 text-emerald-600" />
-                Date & Schedule
+                Climb & Descent Schedule
               </div>
               <div className="font-bold text-gray-900 text-base">
                 {!isNaN(new Date(booking.climbDate).getTime())
                   ? new Date(booking.climbDate).toLocaleDateString("en-US", {
                       weekday: "short",
                       year: "numeric",
-                      month: "long",
+                      month: "short",
                       day: "numeric",
                     })
                   : booking.climbDate}
+                {booking.descentDate && booking.descentDate !== booking.climbDate && (
+                  <span className="text-emerald-700 font-bold block sm:inline sm:ml-1 text-sm">
+                    {" → "}
+                    {!isNaN(new Date(booking.descentDate).getTime())
+                      ? new Date(booking.descentDate).toLocaleDateString("en-US", {
+                          weekday: "short",
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })
+                      : booking.descentDate}
+                  </span>
+                )}
               </div>
-              <div className="text-xs text-gray-600 flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-emerald-600" /> {booking.timeSlot}
+              <div className="text-xs text-gray-600 flex items-center gap-1.5 flex-wrap">
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-emerald-600" /> {booking.timeSlot}
+                </span>
+                {booking.descentDate && booking.descentDate !== booking.climbDate ? (
+                  <span className="text-emerald-800 font-bold px-2 py-0.5 bg-emerald-100 rounded-full text-[10px]">
+                    Overnight Trek
+                  </span>
+                ) : (
+                  <span className="text-slate-600 font-bold px-2 py-0.5 bg-slate-200/80 rounded-full text-[10px]">
+                    Same-Day Dayhike
+                  </span>
+                )}
               </div>
             </div>
 

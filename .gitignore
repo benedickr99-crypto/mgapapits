@@ -28,3 +28,6 @@ dist-ssr
 # Scratch & Temporary scripts
 scratch*
 temp_*
+
+.vercel
+.env*
