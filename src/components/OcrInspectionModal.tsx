@@ -5,7 +5,6 @@ import {
   Loader2,
   CheckCircle2,
   AlertTriangle,
-  Copy,
   Check,
   FileText,
   RefreshCw,
@@ -35,7 +34,6 @@ export function OcrInspectionModal({
   const [statusText, setStatusText] = useState("");
   const [ocrData, setOcrData] = useState<OcrExtractedData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   // Setup preview URL
@@ -91,13 +89,6 @@ export function OcrInspectionModal({
     } finally {
       setIsScanning(false);
     }
-  };
-
-  const handleCopyRaw = () => {
-    if (!ocrData?.rawText) return;
-    navigator.clipboard.writeText(ocrData.rawText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   if (!isOpen) return null;
@@ -349,36 +340,6 @@ export function OcrInspectionModal({
               ) : null}
             </div>
           </div>
-
-          {/* Raw Text View */}
-          {ocrData && (
-            <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-              <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-                <span className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-gray-500" />
-                  Full Raw OCR Text Stream ({ocrData.rawText.length} characters)
-                </span>
-                <button
-                  type="button"
-                  onClick={handleCopyRaw}
-                  className="text-xs text-gray-600 hover:text-emerald-700 font-semibold inline-flex items-center gap-1 transition"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-600" /> Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" /> Copy Text
-                    </>
-                  )}
-                </button>
-              </div>
-              <div className="p-3 max-h-40 overflow-y-auto bg-slate-950 text-slate-100 font-mono text-[11px] leading-relaxed whitespace-pre-wrap rounded-b-xl select-all">
-                {ocrData.rawText.trim() || "(No text recognized)"}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer */}
