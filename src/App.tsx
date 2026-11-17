@@ -129,7 +129,7 @@ export default function App() {
       {!isAdminRoute && <SiteFooter />}
 
       {/* TOASTS */}
-      <Toaster position="top-center" richColors />
+      <Toaster position="bottom-right" richColors />
     </div>
   );
 }
