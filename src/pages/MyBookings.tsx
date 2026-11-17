@@ -28,10 +28,10 @@ import {
 } from "lucide-react";
 import { BookingVoucherModal } from "@/components/BookingVoucherModal";
 import { ReviewModal } from "@/components/ReviewModal";
-import { 
-  getLocalParticipants, 
-  getBookingParticipants, 
-  getBookingTimeSlot, 
+import {
+  getLocalParticipants,
+  getBookingParticipants,
+  getBookingTimeSlot,
   getBookingReferenceNumber,
   deleteBooking
 } from "@/lib/bookingService";
@@ -155,7 +155,7 @@ export default function MyBookings() {
           const cached = localStorage.getItem(`nnnp_bookings_${userId}`);
           if (cached) return JSON.parse(cached);
         }
-      } catch {}
+      } catch { }
     }
     return [];
   });
@@ -169,7 +169,7 @@ export default function MyBookings() {
           const cached = localStorage.getItem(`nnnp_bookings_${userId}`);
           if (cached) return false;
         }
-      } catch {}
+      } catch { }
     }
     return true;
   });
@@ -179,7 +179,7 @@ export default function MyBookings() {
   const highlightId = searchParams.get("bookingId");
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
-  
+
   // Modals
   const [selectedBooking, setSelectedBooking] = useState<BookingWithTrail | null>(null);
   const [voucherData, setVoucherData] = useState<any | null>(null);
@@ -225,7 +225,7 @@ export default function MyBookings() {
         setData(bookingsData as unknown as BookingWithTrail[]);
         try {
           localStorage.setItem(`nnnp_bookings_${user.id}`, JSON.stringify(bookingsData));
-        } catch {}
+        } catch { }
       }
     } catch (err) {
       console.warn("Failed to refresh bookings:", err);
@@ -243,7 +243,7 @@ export default function MyBookings() {
         try {
           setData(JSON.parse(cached));
           setLoading(false);
-        } catch {}
+        } catch { }
       }
       loadBookings(data.length > 0);
     } else {
@@ -259,12 +259,12 @@ export default function MyBookings() {
     try {
       // 1. Try cancel_booking RPC
       const { error: rpcError } = await supabase.rpc('cancel_booking', { p_booking_id: bookingId });
-      
+
       if (rpcError) {
         // Direct update fallback
         await supabase
           .from("bookings")
-          .update({ 
+          .update({
             status: "cancelled",
             notes: cancelReason ? `Cancelled by trekker: ${cancelReason}` : "Cancelled by trekker"
           } as any)
@@ -295,7 +295,7 @@ export default function MyBookings() {
         if (user?.id) {
           try {
             localStorage.setItem(`nnnp_bookings_${user.id}`, JSON.stringify(next));
-          } catch {}
+          } catch { }
         }
         return next;
       });
@@ -439,11 +439,10 @@ export default function MyBookings() {
               setStatusFilter(tab.id);
               setCurrentPage(1);
             }}
-            className={`text-xs font-bold px-3.5 py-1.5 rounded-full transition shrink-0 ${
-              statusFilter === tab.id
+            className={`text-xs font-bold px-3.5 py-1.5 rounded-full transition shrink-0 ${statusFilter === tab.id
                 ? "bg-emerald-700 text-white shadow-xs"
                 : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
-            }`}
+              }`}
           >
             {tab.label}
           </button>
@@ -478,11 +477,10 @@ export default function MyBookings() {
               <div
                 key={b.id}
                 onClick={() => setSelectedBooking(b)}
-                className={`bg-white rounded-2xl shadow-xs p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5 transition-all duration-300 cursor-pointer border ${
-                  isHighlighted
+                className={`bg-white rounded-2xl shadow-xs p-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5 transition-all duration-300 cursor-pointer border ${isHighlighted
                     ? "ring-2 ring-emerald-500 border-emerald-500 bg-emerald-50/30"
                     : "border-gray-200 hover:border-emerald-300 hover:shadow-md"
-                }`}
+                  }`}
               >
                 {/* Left: Info */}
                 <div className="flex-1">
@@ -683,87 +681,53 @@ export default function MyBookings() {
             );
           })}
 
-          {/* Page Limiter & Pagination Controls */}
-          {filteredBookings.length > 0 && (
-            <div className="flex flex-col items-center justify-center gap-3 py-6 px-2 text-xs text-gray-600 border-t border-gray-100 mt-6 bg-white rounded-2xl border shadow-xs">
-              <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-gray-600">
-                <span>Show</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  aria-label="Bookings per page"
-                  className="px-2.5 py-0.5 bg-white border-2 border-emerald-500 rounded-full text-xs font-bold text-gray-800 shadow-xs focus:outline-hidden cursor-pointer"
+          {/* Page navigation controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center py-4 px-2 border-t border-gray-100 mt-6">
+              <div className="flex items-center justify-center gap-1">
+                <button
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage <= 1}
+                  className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                  title="Previous page"
                 >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-                <span>bookings per page</span>
-                <span className="text-gray-300 mx-1">|</span>
-                <span>
-                  Showing{" "}
-                  <strong className="text-gray-900 font-bold">
-                    {filteredBookings.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}
-                  </strong>{" "}
-                  to{" "}
-                  <strong className="text-gray-900 font-bold">
-                    {Math.min(currentPage * pageSize, filteredBookings.length)}
-                  </strong>{" "}
-                  of <strong className="text-gray-900 font-bold">{filteredBookings.length}</strong>
-                </span>
-              </div>
+                  <ChevronLeft size={15} />
+                </button>
 
-              {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-1 mt-1">
-                  <button
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                    disabled={currentPage <= 1}
-                    className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
-                    title="Previous page"
-                  >
-                    <ChevronLeft size={15} />
-                  </button>
-
-                  {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter((page) => {
-                      if (totalPages <= 5) return true;
-                      if (page === 1 || page === totalPages) return true;
-                      return Math.abs(page - currentPage) <= 1;
-                    })
-                    .map((page, idx, arr) => {
-                      const prev = arr[idx - 1];
-                      const hasGap = prev && page - prev > 1;
-                      return (
-                        <Fragment key={page}>
-                          {hasGap && <span className="px-1 text-gray-400">...</span>}
-                          <button
-                            onClick={() => setCurrentPage(page)}
-                            className={`w-7 h-7 rounded-lg text-xs font-bold transition cursor-pointer ${
-                              currentPage === page
-                                ? "bg-emerald-600 text-white shadow-xs"
-                                : "border border-gray-200 text-gray-700 hover:bg-gray-50"
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((page) => {
+                    if (totalPages <= 5) return true;
+                    if (page === 1 || page === totalPages) return true;
+                    return Math.abs(page - currentPage) <= 1;
+                  })
+                  .map((page, idx, arr) => {
+                    const prev = arr[idx - 1];
+                    const hasGap = prev && page - prev > 1;
+                    return (
+                      <Fragment key={page}>
+                        {hasGap && <span className="px-1 text-gray-400">...</span>}
+                        <button
+                          onClick={() => setCurrentPage(page)}
+                          className={`w-7 h-7 rounded-lg text-xs font-bold transition cursor-pointer ${currentPage === page
+                              ? "bg-emerald-600 text-white shadow-xs"
+                              : "border border-gray-200 text-gray-700 hover:bg-gray-50"
                             }`}
-                          >
-                            {page}
-                          </button>
-                        </Fragment>
-                      );
-                    })}
+                        >
+                          {page}
+                        </button>
+                      </Fragment>
+                    );
+                  })}
 
-                  <button
-                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                    disabled={currentPage >= totalPages}
-                    className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
-                    title="Next page"
-                  >
-                    <ChevronRight size={15} />
-                  </button>
-                </div>
-              )}
+                <button
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                  title="Next page"
+                >
+                  <ChevronRight size={15} />
+                </button>
+              </div>
             </div>
           )}
         </div>

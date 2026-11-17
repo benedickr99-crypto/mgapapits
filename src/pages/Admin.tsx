@@ -180,10 +180,6 @@ const PaginationControls = ({
   currentPage,
   totalPages,
   onPageChange,
-  totalItems,
-  pageSize,
-  onPageSizeChange,
-  itemName = "items",
 }: {
   currentPage: number;
   totalPages: number;
@@ -193,92 +189,56 @@ const PaginationControls = ({
   onPageSizeChange?: (size: number) => void;
   itemName?: string;
 }) => {
-  if (totalPages <= 1 && (!totalItems || totalItems === 0)) return null;
+  if (totalPages <= 1) return null;
 
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-4 px-2 text-xs text-slate-600 border-t border-slate-100 mt-2">
-      {/* Page Limiter Dropdown & Range Info (Centered) */}
-      {totalItems !== undefined && pageSize !== undefined && onPageSizeChange && (
-        <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-slate-600">
-          <span>Show</span>
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              onPageSizeChange(Number(e.target.value));
-              onPageChange(1);
-            }}
-            aria-label={`${itemName} per page`}
-            className="px-2.5 py-0.5 bg-white border-2 border-emerald-500 rounded-full text-xs font-bold text-slate-800 shadow-xs focus:outline-hidden cursor-pointer"
-          >
-            <option value={5}>5</option>
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-          </select>
-          <span>{itemName} per page</span>
-          <span className="text-slate-300 mx-1">|</span>
-          <span>
-            Showing{" "}
-            <strong className="text-slate-900 font-bold">
-              {totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1}
-            </strong>{" "}
-            to{" "}
-            <strong className="text-slate-900 font-bold">
-              {Math.min(currentPage * pageSize, totalItems)}
-            </strong>{" "}
-            of <strong className="text-slate-900 font-bold">{totalItems}</strong>
-          </span>
-        </div>
-      )}
-
+    <div className="flex items-center justify-center py-3 px-2 border-t border-slate-100 mt-2">
       {/* Page navigation buttons (Centered) */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-1">
-          <button
-            onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-            disabled={currentPage <= 1}
-            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
-            title="Previous page"
-          >
-            <ChevronLeft size={15} />
-          </button>
+      <div className="flex items-center justify-center gap-1">
+        <button
+          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage <= 1}
+          className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+          title="Previous page"
+        >
+          <ChevronLeft size={15} />
+        </button>
 
-          {Array.from({ length: totalPages }, (_, i) => i + 1)
-            .filter((page) => {
-              if (totalPages <= 5) return true;
-              if (page === 1 || page === totalPages) return true;
-              return Math.abs(page - currentPage) <= 1;
-            })
-            .map((page, idx, arr) => {
-              const prev = arr[idx - 1];
-              const hasGap = prev && page - prev > 1;
-              return (
-                <Fragment key={page}>
-                  {hasGap && <span className="px-1 text-slate-400">...</span>}
-                  <button
-                    onClick={() => onPageChange(page)}
-                    className={`w-7 h-7 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      currentPage === page
-                        ? "bg-emerald-600 text-white shadow-xs"
-                        : "border border-slate-200 text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    {page}
-                  </button>
-                </Fragment>
-              );
-            })}
+        {Array.from({ length: totalPages }, (_, i) => i + 1)
+          .filter((page) => {
+            if (totalPages <= 5) return true;
+            if (page === 1 || page === totalPages) return true;
+            return Math.abs(page - currentPage) <= 1;
+          })
+          .map((page, idx, arr) => {
+            const prev = arr[idx - 1];
+            const hasGap = prev && page - prev > 1;
+            return (
+              <Fragment key={page}>
+                {hasGap && <span className="px-1 text-slate-400">...</span>}
+                <button
+                  onClick={() => onPageChange(page)}
+                  className={`w-7 h-7 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    currentPage === page
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "border border-slate-200 text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {page}
+                </button>
+              </Fragment>
+            );
+          })}
 
-          <button
-            onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-            disabled={currentPage >= totalPages}
-            className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
-            title="Next page"
-          >
-            <ChevronRight size={15} />
-          </button>
-        </div>
-      )}
+        <button
+          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage >= totalPages}
+          className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+          title="Next page"
+        >
+          <ChevronRight size={15} />
+        </button>
+      </div>
     </div>
   );
 };
