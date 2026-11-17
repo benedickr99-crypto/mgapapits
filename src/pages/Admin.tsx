@@ -638,7 +638,7 @@ export default function Admin() {
 
         await supabase.from("notifications").insert({
           user_id: target.user_id,
-          title: "🎉 Booking Approved — Payment & Permit Claim",
+          title: "Booking Approved — Payment & Permit Claim",
           message: `Your booking for ${target.trails?.name || "Trekking Trail"} on ${target.climb_date} (Permit Ref: ${refNo}) has been APPROVED! Please proceed to the DENR NNNP Office to settle the fee and claim your paper permit.`,
           type: "booking_approved",
           read: false,
@@ -651,7 +651,7 @@ export default function Admin() {
         const reasonText = reason ? ` Reason: ${reason}` : "";
         await supabase.from("notifications").insert({
           user_id: target.user_id,
-          title: "❌ Booking Rejected by Park Administration",
+          title: "Booking Rejected by Park Administration",
           message: `Your booking request for ${target.trails?.name || "Trail"} on ${target.climb_date} has been rejected.${reasonText} Please check your My Bookings page for details.`,
           type: "booking_rejected",
           read: false,
@@ -698,7 +698,7 @@ export default function Admin() {
       try {
         await supabase.from("notifications").insert({
           user_id: selectedGuideId,
-          title: "🧭 New Trekking Assignment",
+          title: "New Trekking Assignment",
           message: `Admin has assigned you to lead a trek on ${assigningBooking.climb_date} for ${assigningBooking.trails?.name || "NNNP Trail"} (${assigningBooking.group_size || 1} trekkers). Please review on your Guide Dashboard.`,
           type: "booking_assignment",
           read: false,
@@ -738,7 +738,7 @@ export default function Admin() {
       try {
         await supabase.from("notifications").insert({
           user_id: editingUser.id,
-          title: "🔄 Account Role Updated",
+          title: "Account Role Updated",
           message: `Your TAKAZZ NNNP account role has been updated to: ${roleLabels[newUserRole] || newUserRole.toUpperCase()} by the system administrator.`,
           type: "booking_created",
           read: false,
@@ -748,7 +748,7 @@ export default function Admin() {
         console.warn("Could not notify user about role change:", notifErr);
       }
 
-      toast.success(`User role updated to ${newUserRole.toUpperCase()} ✓`);
+      toast.success(`User role updated to ${newUserRole.toUpperCase()}`);
       setUsersList((prev) =>
         prev.map((u) => (u.id === editingUser.id ? { ...u, role: newUserRole } : u))
       );
@@ -1517,7 +1517,7 @@ export default function Admin() {
                     </div>
 
                     {pendingBookings === 0 ? (
-                      <p className="text-xs text-amber-700">All pending bookings have been reviewed! 🎉</p>
+                      <p className="text-xs text-amber-700">All pending bookings have been reviewed!</p>
                     ) : (
                       <div className="space-y-2.5 max-h-64 overflow-y-auto">
                         {bookings
@@ -1591,7 +1591,7 @@ export default function Admin() {
                   <p className="text-xs text-slate-500">Manage registered user accounts, assign roles, and inspect climber profiles</p>
                 </div>
 
-                {/* ⚠️ Email setup banner — shown when RPC not yet applied */}
+                {/* Email setup banner — shown when RPC not yet applied */}
                 {!emailsAvailable && (
                   <div className="w-full mt-3 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
@@ -2107,31 +2107,31 @@ export default function Admin() {
                   onClick={() => setReportsSubTab("analytics")}
                   className={`px-4 py-2 rounded-xl transition ${reportsSubTab === "analytics" ? "bg-white text-emerald-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
                 >
-                  📊 Visitor Analytics & Excel
+                  Visitor Analytics & Excel
                 </button>
                 <button
                   onClick={() => setReportsSubTab("heatmap")}
                   className={`px-4 py-2 rounded-xl transition ${reportsSubTab === "heatmap" ? "bg-white text-emerald-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
                 >
-                  🔥 Trail Heat Map
+                  Trail Heat Map
                 </button>
                 <button
                   onClick={() => setReportsSubTab("incidents")}
                   className={`px-4 py-2 rounded-xl transition ${reportsSubTab === "incidents" ? "bg-white text-emerald-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
                 >
-                  ⚠️ Field Incidents & Safety
+                  Field Incidents & Safety
                 </button>
                 <button
                   onClick={() => setReportsSubTab("schedules")}
                   className={`px-4 py-2 rounded-xl transition ${reportsSubTab === "schedules" ? "bg-white text-emerald-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
                 >
-                  📅 Schedules & Quota Controls
+                  Schedules & Quota Controls
                 </button>
                 <button
                   onClick={() => setReportsSubTab("reviews")}
                   className={`px-4 py-2 rounded-xl transition ${reportsSubTab === "reviews" ? "bg-white text-emerald-900 shadow-xs" : "text-slate-600 hover:text-slate-900"}`}
                 >
-                  ⭐ Ratings & Feedback
+                  Ratings & Feedback
                 </button>
               </div>
 

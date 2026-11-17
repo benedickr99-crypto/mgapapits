@@ -260,7 +260,7 @@ export const AdminAnalytics = ({ bookings, guides, trails }: AnalyticsProps) => 
       { metric: "Average Group Size", value: `${avgGroupSize} Pax`, note: "Hikers per permit" },
       { metric: "Total Safety Incidents", value: totalIncidents, note: `${resolvedIncidents} resolved by park rangers` },
       { metric: "Accredited Tour Guides", value: guides.length, note: "Registered local community guides" },
-      { metric: "Average Hiker Satisfaction", value: `${avgRating} ★`, note: "Based on trekker feedback submissions" },
+      { metric: "Average Hiker Satisfaction", value: `${avgRating} / 5`, note: "Based on trekker feedback submissions" },
       { metric: "Designated Public Trails", value: trails.length, note: "Active trekking routes within NNNP" },
       { metric: "Report Generation Timestamp", value: new Date().toLocaleString(), note: "Real-time DENR audit ledger" },
     ];
@@ -413,7 +413,7 @@ export const AdminAnalytics = ({ bookings, guides, trails }: AnalyticsProps) => 
         { "Category": "Field Safety", "Key Performance Indicator": "Incidents Resolved", "Value": resolvedIncidents },
         { "Category": "Park Operations", "Key Performance Indicator": "Accredited Tour Guides", "Value": guides.length },
         { "Category": "Park Operations", "Key Performance Indicator": "Public Trekking Trails", "Value": trails.length },
-        { "Category": "Park Operations", "Key Performance Indicator": "Average Trekker Satisfaction", "Value": `${avgRating} ★` },
+        { "Category": "Park Operations", "Key Performance Indicator": "Average Trekker Satisfaction", "Value": `${avgRating} / 5` },
       ];
       const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
       wsSummary["!cols"] = [{ wch: 24 }, { wch: 32 }, { wch: 35 }];
@@ -598,7 +598,7 @@ export const AdminAnalytics = ({ bookings, guides, trails }: AnalyticsProps) => 
         >
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Hiker Rating</span>
           <div className="text-2xl font-black text-amber-600 mt-1 flex items-center gap-1">
-            {avgRating} <span className="text-xs">★</span>
+            {avgRating} <span className="text-xs text-slate-400">/ 5</span>
           </div>
           <p className="text-[10px] text-slate-500 mt-0.5">{reviews.length} Reviews</p>
         </div>
@@ -949,7 +949,7 @@ export const AdminAnalytics = ({ bookings, guides, trails }: AnalyticsProps) => 
                       </th>
                       <th className="py-2.5 px-3 border-r border-slate-200 font-extrabold text-slate-700 text-center">
                         <span className="text-[9px] font-mono text-slate-400 block font-normal">Col D</span>
-                        Overall (★)
+                        Overall Rating (1-5)
                       </th>
                       <th className="py-2.5 px-3 border-r border-slate-200 font-extrabold text-slate-700 min-w-[220px]">
                         <span className="text-[9px] font-mono text-slate-400 block font-normal">Col E</span>
@@ -1160,7 +1160,7 @@ export const AdminAnalytics = ({ bookings, guides, trails }: AnalyticsProps) => 
                               {row.guide_name || "Guide"}
                             </td>
                             <td className="py-2 px-3 border-r border-slate-100 text-center font-black text-amber-600">
-                              {row.overall_rating || 5} ★
+                              {row.overall_rating || 5} / 5
                             </td>
                             <td className="py-2 px-3 border-r border-slate-100 text-slate-600 italic truncate max-w-[240px]">
                               "{row.feedback_text || "Great climb"}"

@@ -72,11 +72,9 @@ export function useNotifications() {
           setNotifications((prev) => [newNotification, ...prev]);
           setUnreadCount((prev) => prev + 1);
 
-          // Show a beautiful toast popup
+          // Show a toast popup
           toast(newNotification.title, {
             description: newNotification.message,
-            icon: newNotification.type === 'booking_created' ? '🔔' : 
-                  newNotification.type === 'booking_approved' ? '✅' : '✅',
           });
         }
       )

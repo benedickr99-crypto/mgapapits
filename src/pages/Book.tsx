@@ -140,7 +140,7 @@ function DocumentUploadField({
             {isSuccess && (
               <div className="mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 text-[11px] font-bold">
                 <Check className="w-3 h-3 text-emerald-700 shrink-0" />
-                <span>{statusMessage || "Name Matches ID ✓"}</span>
+                <span>{statusMessage || "Name Matches ID"}</span>
               </div>
             )}
 
@@ -1009,7 +1009,7 @@ export default function Book() {
 
       if (matchCheck.isMatch) {
         toast.success(
-          `Participant #${idx + 1} ID Verified: Name matches "${currentParticipantName || result.detectedName}" ✓`,
+          `Participant #${idx + 1} ID Verified: Name matches "${currentParticipantName || result.detectedName}"`,
           { id: `id-verify-${idx}`, duration: 5000 }
         );
       } else {
@@ -2079,7 +2079,7 @@ export default function Book() {
                                       : "bg-red-100 text-red-800 border-red-300 animate-pulse"
                                     }`}
                                 >
-                                  {validIdMatchStatus.isMatch ? "✓ Matches ID" : "⚠️ Does not match ID"}
+                                  {validIdMatchStatus.isMatch ? "Matches ID" : "Does not match ID"}
                                 </span>
                               )}
                             </div>
@@ -2199,7 +2199,7 @@ export default function Book() {
                                 )}
                                 <div>
                                   <span className={`font-bold ${validIdMatchStatus?.isMatch ? "text-emerald-900" : "text-red-900"}`}>
-                                    {validIdMatchStatus?.isMatch ? "✓ ID Verified & Matched: " : "⚠️ ID Name Mismatch: "}
+                                    {validIdMatchStatus?.isMatch ? "ID Verified & Matched: " : "ID Name Mismatch: "}
                                   </span>
                                   <span className="font-semibold">
                                     {ocrState.detectedName || "Valid ID"}
@@ -2267,7 +2267,7 @@ export default function Book() {
                                 !validIdMatchStatus
                                   ? undefined
                                   : validIdMatchStatus.isMatch
-                                    ? "Name Matches ID ✓"
+                                    ? "Name Matches ID"
                                     : "ID Mismatch • Must Be Visible"
                               }
                               accept=".pdf,.jpg,.jpeg,.png"
@@ -2673,7 +2673,7 @@ export default function Book() {
               });
 
               if (matchCheck.isMatch) {
-                toast.success(`Participant #${idx + 1} ID verified! Name matches profile ✓`);
+                toast.success(`Participant #${idx + 1} ID verified! Name matches profile`);
               } else {
                 toast.error(
                   `Participant #${idx + 1}: The government ID must be visible and match "${pName}". Please upload a legible ID.`,
