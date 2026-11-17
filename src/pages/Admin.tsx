@@ -218,11 +218,10 @@ const PaginationControls = ({
                 {hasGap && <span className="px-1 text-slate-400">...</span>}
                 <button
                   onClick={() => onPageChange(page)}
-                  className={`w-7 h-7 rounded-lg text-xs font-bold transition cursor-pointer ${
-                    currentPage === page
+                  className={`w-7 h-7 rounded-lg text-xs font-bold transition cursor-pointer ${currentPage === page
                       ? "bg-emerald-600 text-white shadow-xs"
                       : "border border-slate-200 text-slate-700 hover:bg-slate-50"
-                  }`}
+                    }`}
                 >
                   {page}
                 </button>
@@ -1158,8 +1157,8 @@ export default function Admin() {
                     key={item.id}
                     onClick={() => handleTabChange(item.id)}
                     className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold transition-all text-left ${isActive
-                        ? "bg-emerald-600 text-white shadow-sm shadow-emerald-900"
-                        : "text-emerald-100/80 hover:bg-emerald-900/70 hover:text-white"
+                      ? "bg-emerald-600 text-white shadow-sm shadow-emerald-900"
+                      : "text-emerald-100/80 hover:bg-emerald-900/70 hover:text-white"
                       }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
@@ -1674,10 +1673,10 @@ export default function Admin() {
                         <td className="py-3.5 px-4">
                           <span
                             className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] uppercase border ${u.role === "admin"
-                                ? "bg-red-100 text-red-800 border-red-200"
-                                : u.role === "guide"
-                                  ? "bg-amber-100 text-amber-800 border-amber-200"
-                                  : "bg-emerald-100 text-emerald-800 border-emerald-200"
+                              ? "bg-red-100 text-red-800 border-red-200"
+                              : u.role === "guide"
+                                ? "bg-amber-100 text-amber-800 border-amber-200"
+                                : "bg-emerald-100 text-emerald-800 border-emerald-200"
                               }`}
                           >
                             {u.role}
@@ -2928,11 +2927,10 @@ export default function Admin() {
                   key={preset}
                   type="button"
                   onClick={() => setRejectionReason(preset)}
-                  className={`text-[11px] px-2.5 py-1.5 rounded-xl border transition font-medium text-left ${
-                    rejectionReason === preset
+                  className={`text-[11px] px-2.5 py-1.5 rounded-xl border transition font-medium text-left ${rejectionReason === preset
                       ? "bg-red-600 text-white border-red-600"
                       : "bg-red-50 text-red-800 border-red-200 hover:bg-red-100"
-                  }`}
+                    }`}
                 >
                   {preset}
                 </button>
