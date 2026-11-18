@@ -1959,9 +1959,56 @@ export default function Admin() {
           {/* TAB 7: MAPS AND DIRECTIONS */}
           {activeTab === "navigation" && (
             <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-6">
-              <div className="border-b pb-4">
-                <h2 className="text-lg font-bold text-slate-900">Maps & Trailhead Directions</h2>
-                <p className="text-xs text-slate-500">Official DENR outpost GPS landmarks, meeting points, and navigation links</p>
+              <div className="border-b pb-4 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Maps & Trailhead Navigation Management</h2>
+                  <p className="text-xs text-slate-500">Official DENR outpost GPS landmarks, meeting points, and Strava-style GPS trail route editor</p>
+                </div>
+                <Link
+                  to="/navigation"
+                  className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-2xl text-xs font-bold transition flex items-center gap-2 shadow-sm"
+                >
+                  <MapPin size={14} /> Open Full GPS Route Editor
+                </Link>
+              </div>
+
+              {/* Centralized Trail Management & Mapping Hub Banner */}
+              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                    Strava-Style GPS Polyline Editor
+                  </span>
+                  <h3 className="font-extrabold text-emerald-950 text-sm">Interactive GPS Route Drawing & Checkpoint Management</h3>
+                  <p className="text-xs text-emerald-800/80">
+                    Draw sequential GPS trail coordinates, place verified checkpoints (e.g., Tinagong Dagat), calculate exact distances, and publish verified trails.
+                  </p>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <Link
+                    to="/navigation?trail=mt-mandalagan"
+                    className="px-3 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-bold transition shadow-2xs"
+                  >
+                    Mt. Mandalagan
+                  </Link>
+                  <Link
+                    to="/navigation?trail=mt-silay"
+                    className="px-3 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-bold transition shadow-2xs"
+                  >
+                    Mt. Silay
+                  </Link>
+                  <Link
+                    to="/navigation?trail=mt-marapara"
+                    className="px-3 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-bold transition shadow-2xs"
+                  >
+                    Mt. Marapara
+                  </Link>
+                  <Link
+                    to="/navigation?trail=kumalisikis"
+                    className="px-3 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-bold transition shadow-2xs"
+                  >
+                    Malatan-og Falls
+                  </Link>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1983,22 +2030,28 @@ export default function Admin() {
                       <p className="text-[11px] text-slate-500 italic">{trail.meetingPoint.address}</p>
                     </div>
 
-                    <div className="flex gap-2 text-xs">
+                    <div className="flex gap-2 text-xs flex-wrap">
+                      <Link
+                        to={`/navigation?trail=${id}`}
+                        className="flex-1 py-2 text-center bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-xs"
+                      >
+                        <MapPin size={14} /> Draw / Edit GPS Route
+                      </Link>
                       <a
                         href={trail.navigationUrls.googleMaps}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex-1 py-2 text-center bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl transition flex items-center justify-center gap-1.5"
+                        className="py-2 px-3 text-center bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl transition flex items-center justify-center gap-1.5"
                       >
-                        <MapPin size={14} /> Open Google Maps
+                        Google Maps
                       </a>
                       <a
                         href={trail.navigationUrls.waze}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex-1 py-2 text-center bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl transition flex items-center justify-center gap-1.5"
+                        className="py-2 px-3 text-center bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl transition flex items-center justify-center gap-1.5"
                       >
-                        <Compass size={14} /> Open Waze
+                        Waze
                       </a>
                     </div>
                   </div>

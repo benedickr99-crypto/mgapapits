@@ -3,6 +3,8 @@ import L from "leaflet";
 import {
   RoutePoint,
   CheckpointItem,
+  JumpOffOption,
+  TrailRouteStatus,
   calculateTotalDistance,
   MANDALAGAN_DEFAULT_START,
   MANDALAGAN_DEFAULT_DESTINATION,
@@ -10,12 +12,20 @@ import {
   DEFAULT_MANDALAGAN_CHECKPOINTS,
 } from "@/lib/routeTypes";
 import {
+  saveTrailForOffline,
+  isTrailAvailableOffline,
+  getOfflineTrail,
+  removeOfflineTrail,
+} from "@/lib/offlineTrails";
+import { toast } from "sonner";
+import {
   MapPin,
   Flag,
   Mountain,
   Plus,
   Trash2,
   Undo2,
+  Redo2,
   RotateCcw,
   Save,
   CheckCircle2,
@@ -24,6 +34,14 @@ import {
   Maximize2,
   Navigation,
   Compass,
+  Download,
+  Wifi,
+  WifiOff,
+  Eye,
+  Edit3,
+  Clock,
+  Activity,
+  AlertTriangle,
 } from "lucide-react";
 
 // Fix Leaflet's default icon path issues in bundled environments
@@ -91,29 +109,45 @@ interface StravaTrailMapProps {
   initialPoints?: RoutePoint[];
   initialCheckpoints?: CheckpointItem[];
   isAdmin?: boolean;
+  trailKey?: string;
+  trailName?: string;
+  mountain?: string;
+  location?: string;
+  trailDifficulty?: string;
+  trailDuration?: string;
+  isSaving?: boolean;
+  publishedStatus?: TrailRouteStatus;
+  startPointName?: string;
+  destinationName?: string;
+  jumpOffOptions?: JumpOffOption[];
+  selectedJumpOffId?: string;
+  onSelectJumpOff?: (jumpOff: JumpOffOption) => void;
   onSaveRoute?: (routeData: {
     points: RoutePoint[];
     checkpoints: CheckpointItem[];
     distanceKm: number;
-    status: "draft" | "published";
+    status: TrailRouteStatus;
   }) => Promise<void> | void;
-  trailName?: string;
-  trailDifficulty?: string;
-  trailDuration?: string;
-  isSaving?: boolean;
-  publishedStatus?: "draft" | "published";
 }
 
 export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
   initialPoints,
   initialCheckpoints,
   isAdmin = false,
-  onSaveRoute,
+  trailKey = "mt-mandalagan",
   trailName = "Mount Mandalagan Summit Trail",
+  mountain = "Mount Mandalagan",
+  location = "Silay City, Negros Occidental",
   trailDifficulty = "Challenging",
   trailDuration = "7 - 9 hours",
   isSaving = false,
   publishedStatus = "draft",
+  startPointName = "Old Hospital, Barangay Patag",
+  destinationName = "Mount Mandalagan Summit",
+  jumpOffOptions = [],
+  selectedJumpOffId,
+  onSelectJumpOff,
+  onSaveRoute,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -137,11 +171,15 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
       : DEFAULT_MANDALAGAN_CHECKPOINTS;
   });
 
-  // History for undo
+  // History for undo & redo
   const [history, setHistory] = useState<RoutePoint[][]>([]);
+  const [redoStack, setRedoStack] = useState<RoutePoint[][]>([]);
 
-  // Mode for click handling: "add_point" | "add_checkpoint" | "view"
+  // Mode for click handling: "browse" | "draw" | "checkpoint"
   const [activeTool, setActiveTool] = useState<"draw" | "checkpoint" | "browse">("browse");
+
+  // Admin preview mode (simulate trekker view)
+  const [previewMode, setPreviewMode] = useState<boolean>(false);
 
   // Temporary checkpoint state for modal
   const [pendingCheckpointCoord, setPendingCheckpointCoord] = useState<RoutePoint | null>(null);
@@ -151,42 +189,58 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
   const [showCpModal, setShowCpModal] = useState(false);
 
   // Status state
-  const [currentStatus, setCurrentStatus] = useState<"draft" | "published">(publishedStatus);
+  const [currentStatus, setCurrentStatus] = useState<TrailRouteStatus>(publishedStatus);
+
+  // Map ready flag — ensures click-listener effect fires AFTER map is initialized
+  const [mapReady, setMapReady] = useState(false);
+
+  // Offline status tracking
+  const [isOfflineAvailable, setIsOfflineAvailable] = useState<boolean>(() =>
+    isTrailAvailableOffline(trailKey)
+  );
+  const [showOfflineModal, setShowOfflineModal] = useState(false);
 
   // Total distance calculation
   const totalDistanceKm = useMemo(() => {
     return calculateTotalDistance(points);
   }, [points]);
 
-  // Sync external changes
+  // Sync external changes when trailKey or initialPoints change
   useEffect(() => {
     if (initialPoints && initialPoints.length > 0) {
       setPoints(initialPoints);
+      setHistory([]);
+      setRedoStack([]);
     }
-  }, [initialPoints]);
+  }, [initialPoints, trailKey]);
 
   useEffect(() => {
     if (initialCheckpoints && initialCheckpoints.length > 0) {
       setCheckpoints(initialCheckpoints);
     }
-  }, [initialCheckpoints]);
+  }, [initialCheckpoints, trailKey]);
 
   useEffect(() => {
     setCurrentStatus(publishedStatus);
   }, [publishedStatus]);
 
+  useEffect(() => {
+    setIsOfflineAvailable(isTrailAvailableOffline(trailKey));
+  }, [trailKey]);
+
   // Initialize Leaflet Map
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
-    // Center between Patag and Summit
-    const centerLat = (MANDALAGAN_DEFAULT_START.lat + MANDALAGAN_DEFAULT_DESTINATION.lat) / 2;
-    const centerLng = (MANDALAGAN_DEFAULT_START.lng + MANDALAGAN_DEFAULT_DESTINATION.lng) / 2;
+    const initialStart = points[0] || MANDALAGAN_DEFAULT_START;
+    const initialEnd = points[points.length - 1] || MANDALAGAN_DEFAULT_DESTINATION;
+    const centerLat = (initialStart.lat + initialEnd.lat) / 2;
+    const centerLng = (initialStart.lng + initialEnd.lng) / 2;
 
     const map = L.map(mapContainerRef.current, {
       center: [centerLat, centerLng],
       zoom: 13,
-      zoomControl: false, // We add custom positioned zoom control
+      zoomControl: false,
     });
 
     // Add OpenStreetMap base tile layer
@@ -204,12 +258,26 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
     checkpointsLayerGroupRef.current = L.layerGroup().addTo(map);
 
     mapInstanceRef.current = map;
+    setMapReady(true);
 
     return () => {
       map.remove();
       mapInstanceRef.current = null;
+      setMapReady(false);
     };
   }, []);
+
+  // Center/Fit map when trail changes
+  useEffect(() => {
+    if (!mapInstanceRef.current || points.length === 0) return;
+    try {
+      const latLngs: [number, number][] = points.map((p) => [p.lat, p.lng]);
+      const bounds = L.latLngBounds(latLngs);
+      mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+    } catch (e) {
+      console.warn("Could not fit route bounds:", e);
+    }
+  }, [trailKey]);
 
   // Update map click listeners depending on active tool and role
   useEffect(() => {
@@ -218,18 +286,21 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
 
     map.off("click");
 
-    if (isAdmin && activeTool === "draw") {
+    const effectiveAdmin = isAdmin && !previewMode;
+
+    if (effectiveAdmin && activeTool === "draw") {
       map.on("click", (e: L.LeafletMouseEvent) => {
         const newPoint: RoutePoint = {
           lat: Number(e.latlng.lat.toFixed(6)),
           lng: Number(e.latlng.lng.toFixed(6)),
         };
         setPoints((prev) => {
-          setHistory((h) => [...h.slice(-15), prev]);
+          setHistory((h) => [...h.slice(-20), prev]);
+          setRedoStack([]); // Clear redo on new action
           return [...prev, newPoint];
         });
       });
-    } else if (isAdmin && activeTool === "checkpoint") {
+    } else if (effectiveAdmin && activeTool === "checkpoint") {
       map.on("click", (e: L.LeafletMouseEvent) => {
         setPendingCheckpointCoord({
           lat: Number(e.latlng.lat.toFixed(6)),
@@ -241,7 +312,7 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
         setShowCpModal(true);
       });
     }
-  }, [isAdmin, activeTool]);
+  }, [isAdmin, activeTool, mapReady, previewMode]);
 
   // Re-render Strava Route Polyline and Markers whenever points change
   useEffect(() => {
@@ -268,9 +339,8 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
     const latLngs: [number, number][] = points.map((p) => [p.lat, p.lng]);
 
     // Strava-Style Aesthetic: Outer vibrant neon glow + Inner thick solid line
-    // Outer glow polyline
     const glowPolyline = L.polyline(latLngs, {
-      color: "#059669", // Darker emerald backdrop for high contrast
+      color: "#059669",
       weight: 10,
       opacity: 0.35,
       lineCap: "round",
@@ -280,7 +350,7 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
 
     // Continuous bright green Strava GPS route polyline
     const mainPolyline = L.polyline(latLngs, {
-      color: "#10b981", // Strava-style vibrant energetic green
+      color: "#10b981",
       weight: 6,
       opacity: 0.95,
       lineCap: "round",
@@ -288,61 +358,67 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
     }).addTo(map);
     polylineLayerRef.current = mainPolyline;
 
-    // 3. Render Start Marker (Always at index 0 or default Old Hospital)
-    const startPoint = points[0] || MANDALAGAN_DEFAULT_START;
-    const startMarker = L.marker([startPoint.lat, startPoint.lng], {
-      icon: startIcon,
-      title: "Trail Starting Point: Old Hospital, Patag",
-      draggable: isAdmin && activeTool === "draw",
-    });
-    startMarker.bindPopup(`
-      <div style="font-family: sans-serif; min-width: 180px;">
-        <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: bold; text-transform: uppercase;">
-          Starting Trailhead
-        </span>
-        <h4 style="font-size: 14px; font-weight: 800; margin: 6px 0 2px 0; color: #111827;">Old Hospital, Brgy. Patag</h4>
-        <p style="font-size: 11px; color: #4b5563; margin: 0;">Silay City, Negros Occidental</p>
-        <p style="font-size: 10px; color: #9ca3af; margin-top: 4px; font-family: monospace;">GPS: ${startPoint.lat.toFixed(4)}, ${startPoint.lng.toFixed(4)}</p>
-      </div>
-    `);
-    if (isAdmin && activeTool === "draw") {
-      startMarker.on("dragend", (e: any) => {
-        const marker = e.target;
-        const position = marker.getLatLng();
-        setPoints((prev) => {
-          setHistory((h) => [...h, prev]);
-          const updated = [...prev];
-          updated[0] = { lat: Number(position.lat.toFixed(6)), lng: Number(position.lng.toFixed(6)) };
-          return updated;
-        });
-      });
-    }
-    markersLayerGroupRef.current?.addLayer(startMarker);
+    const effectiveAdmin = isAdmin && !previewMode;
 
-    // 4. Render Destination Marker (Mount Mandalagan Summit)
-    const destPoint = points[points.length - 1] || MANDALAGAN_DEFAULT_DESTINATION;
-    if (points.length > 1) {
+    // 3. Render Start Marker
+    const startPoint = points[0];
+    if (startPoint) {
+      const startMarker = L.marker([startPoint.lat, startPoint.lng], {
+        icon: startIcon,
+        title: `Start: ${startPointName}`,
+        draggable: effectiveAdmin && activeTool === "draw",
+      });
+      startMarker.bindPopup(`
+        <div style="font-family: sans-serif; min-width: 190px;">
+          <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: bold; text-transform: uppercase;">
+            Verified Trailhead
+          </span>
+          <h4 style="font-size: 14px; font-weight: 800; margin: 6px 0 2px 0; color: #111827;">${startPointName}</h4>
+          <p style="font-size: 11px; color: #4b5563; margin: 0;">${location}</p>
+          <p style="font-size: 10px; color: #9ca3af; margin-top: 4px; font-family: monospace;">GPS: ${startPoint.lat.toFixed(4)}, ${startPoint.lng.toFixed(4)}</p>
+        </div>
+      `);
+      if (effectiveAdmin && activeTool === "draw") {
+        startMarker.on("dragend", (e: any) => {
+          const marker = e.target;
+          const position = marker.getLatLng();
+          setPoints((prev) => {
+            setHistory((h) => [...h, prev]);
+            setRedoStack([]);
+            const updated = [...prev];
+            updated[0] = { lat: Number(position.lat.toFixed(6)), lng: Number(position.lng.toFixed(6)) };
+            return updated;
+          });
+        });
+      }
+      markersLayerGroupRef.current?.addLayer(startMarker);
+    }
+
+    // 4. Render Destination Marker
+    const destPoint = points[points.length - 1];
+    if (points.length > 1 && destPoint) {
       const destMarker = L.marker([destPoint.lat, destPoint.lng], {
         icon: destinationIcon,
-        title: "Trail Destination: Mt. Mandalagan Summit",
-        draggable: isAdmin && activeTool === "draw",
+        title: `Destination: ${destinationName}`,
+        draggable: effectiveAdmin && activeTool === "draw",
       });
       destMarker.bindPopup(`
-        <div style="font-family: sans-serif; min-width: 180px;">
+        <div style="font-family: sans-serif; min-width: 190px;">
           <span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: bold; text-transform: uppercase;">
-            Destination Peak
+            Destination Peak / Landmark
           </span>
-          <h4 style="font-size: 14px; font-weight: 800; margin: 6px 0 2px 0; color: #111827;">Mount Mandalagan Summit</h4>
-          <p style="font-size: 11px; color: #4b5563; margin: 0;">Peak Elevation: 1,885 MASL</p>
+          <h4 style="font-size: 14px; font-weight: 800; margin: 6px 0 2px 0; color: #111827;">${destinationName}</h4>
+          <p style="font-size: 11px; color: #4b5563; margin: 0;">${mountain}</p>
           <p style="font-size: 10px; color: #9ca3af; margin-top: 4px; font-family: monospace;">GPS: ${destPoint.lat.toFixed(4)}, ${destPoint.lng.toFixed(4)}</p>
         </div>
       `);
-      if (isAdmin && activeTool === "draw") {
+      if (effectiveAdmin && activeTool === "draw") {
         destMarker.on("dragend", (e: any) => {
           const marker = e.target;
           const position = marker.getLatLng();
           setPoints((prev) => {
             setHistory((h) => [...h, prev]);
+            setRedoStack([]);
             const updated = [...prev];
             updated[updated.length - 1] = {
               lat: Number(position.lat.toFixed(6)),
@@ -356,7 +432,7 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
     }
 
     // 5. If Admin is in Draw mode, render draggable waypoints for intermediate points
-    if (isAdmin && activeTool === "draw" && points.length > 2) {
+    if (effectiveAdmin && activeTool === "draw" && points.length > 2) {
       for (let i = 1; i < points.length - 1; i++) {
         const pt = points[i];
         const wpMarker = L.marker([pt.lat, pt.lng], {
@@ -370,6 +446,7 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
           const position = marker.getLatLng();
           setPoints((prev) => {
             setHistory((h) => [...h, prev]);
+            setRedoStack([]);
             const updated = [...prev];
             updated[i] = {
               lat: Number(position.lat.toFixed(6)),
@@ -395,6 +472,7 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
             btn.onclick = () => {
               setPoints((prev) => {
                 setHistory((h) => [...h, prev]);
+                setRedoStack([]);
                 return prev.filter((_, idx) => idx !== i);
               });
             };
@@ -404,12 +482,14 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
         markersLayerGroupRef.current?.addLayer(wpMarker);
       }
     }
-  }, [points, isAdmin, activeTool]);
+  }, [points, isAdmin, activeTool, previewMode, startPointName, destinationName, mountain, location]);
 
   // Re-render Checkpoint Markers
   useEffect(() => {
     if (!checkpointsLayerGroupRef.current) return;
     checkpointsLayerGroupRef.current.clearLayers();
+
+    const effectiveAdmin = isAdmin && !previewMode;
 
     checkpoints.forEach((cp) => {
       const marker = L.marker([cp.lat, cp.lng], {
@@ -427,7 +507,7 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
           ${cp.description ? `<p style="font-size: 11px; color: #4b5563; margin: 4px 0;">${cp.description}</p>` : ""}
           <p style="font-size: 10px; color: #9ca3af; margin-top: 4px; font-family: monospace;">GPS: ${cp.lat.toFixed(4)}, ${cp.lng.toFixed(4)}</p>
           ${
-            isAdmin
+            effectiveAdmin
               ? `<div style="margin-top: 8px; border-top: 1px solid #e5e7eb; padding-top: 6px;">
                   <button id="del-cp-${cp.id}" style="background: #fee2e2; color: #dc2626; border: 1px solid #f87171; font-weight: bold; padding: 4px 8px; border-radius: 6px; font-size: 11px; cursor: pointer; width: 100%;">
                     Delete Checkpoint
@@ -438,7 +518,7 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
         </div>
       `);
 
-      if (isAdmin) {
+      if (effectiveAdmin) {
         marker.on("popupopen", () => {
           const btn = document.getElementById(`del-cp-${cp.id}`);
           if (btn) {
@@ -451,7 +531,7 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
 
       checkpointsLayerGroupRef.current?.addLayer(marker);
     });
-  }, [checkpoints, isAdmin]);
+  }, [checkpoints, isAdmin, previewMode]);
 
   // Fit bounds to show entire route
   const fitRouteBounds = () => {
@@ -461,27 +541,47 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
     mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
   };
 
-  // Undo last route addition
+  // Undo last route modification
   const handleUndo = () => {
     if (history.length === 0) return;
-    const last = history[history.length - 1];
+    const previous = history[history.length - 1];
     setHistory((prev) => prev.slice(0, prev.length - 1));
-    setPoints(last);
+    setRedoStack((prev) => [...prev, points]);
+    setPoints(previous);
   };
 
-  // Clear route completely (or reset to start + summit)
+  // Redo route modification
+  const handleRedo = () => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[redoStack.length - 1];
+    setRedoStack((prev) => prev.slice(0, prev.length - 1));
+    setHistory((prev) => [...prev, points]);
+    setPoints(next);
+  };
+
+  // Clear route completely (retaining only start and destination)
   const handleClearRoute = () => {
-    if (!confirm("Are you sure you want to clear all plotted route points?")) return;
+    if (!confirm("Are you sure you want to clear all intermediate plotted route points?")) return;
     setHistory((prev) => [...prev, points]);
-    setPoints([MANDALAGAN_DEFAULT_START, MANDALAGAN_DEFAULT_DESTINATION]);
+    setRedoStack([]);
+    if (points.length >= 2) {
+      setPoints([points[0], points[points.length - 1]]);
+    } else {
+      setPoints([]);
+    }
   };
 
-  // Reset to verified Strava route
+  // Reset to initial points
   const handleResetToVerified = () => {
-    if (!confirm("Reset route to the verified NNNP Patag to Mandalagan Summit path?")) return;
+    if (!confirm(`Reset route to verified NNNP default coordinates for ${trailName}?`)) return;
     setHistory((prev) => [...prev, points]);
-    setPoints(DEFAULT_MANDALAGAN_GPS_POINTS);
-    setCheckpoints(DEFAULT_MANDALAGAN_CHECKPOINTS);
+    setRedoStack([]);
+    if (initialPoints && initialPoints.length > 0) {
+      setPoints(initialPoints);
+    }
+    if (initialCheckpoints && initialCheckpoints.length > 0) {
+      setCheckpoints(initialCheckpoints);
+    }
   };
 
   // Save checkpoint modal confirmation
@@ -500,8 +600,8 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
     setPendingCheckpointCoord(null);
   };
 
-  // Save handler (Draft or Published)
-  const handleSave = async (status: "draft" | "published") => {
+  // Save handler for any status
+  const handleSave = async (status: TrailRouteStatus) => {
     if (!onSaveRoute) return;
     setCurrentStatus(status);
     await onSaveRoute({
@@ -510,6 +610,46 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
       distanceKm: totalDistanceKm,
       status,
     });
+  };
+
+  // Offline Download handler
+  const handleDownloadOffline = () => {
+    const record = {
+      trailKey,
+      trailName,
+      mountain,
+      location,
+      jumpOffName: startPointName,
+      jumpOffCoord: points[0] || MANDALAGAN_DEFAULT_START,
+      destinationName,
+      destinationCoord: points[points.length - 1] || MANDALAGAN_DEFAULT_DESTINATION,
+      points,
+      checkpoints,
+      distanceKm: totalDistanceKm,
+      duration: trailDuration,
+      difficulty: trailDifficulty,
+      safetyReminders: [
+        "Stay on the verified GPS line.",
+        "Accredited DENR guide is required.",
+        "Do not leave designated trails in dense weather.",
+      ],
+      downloadedAt: new Date().toISOString(),
+      version: "1.0",
+    };
+
+    const success = saveTrailForOffline(record);
+    if (success) {
+      setIsOfflineAvailable(true);
+      toast.success(`${trailName} route saved for offline viewing!`);
+    } else {
+      toast.error("Failed to save trail data for offline use.");
+    }
+  };
+
+  const handleRemoveOffline = () => {
+    removeOfflineTrail(trailKey);
+    setIsOfflineAvailable(false);
+    toast.info("Offline trail data removed.");
   };
 
   return (
@@ -521,23 +661,41 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
             <Mountain className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold tracking-widest uppercase bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full">
-                Strava GPS Trail
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-bold tracking-widest uppercase bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                <Activity className="w-3 h-3" /> Strava GPS Trail
               </span>
               <span
-                className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full ${
                   currentStatus === "published"
-                    ? "bg-emerald-500 text-slate-950"
-                    : "bg-amber-500/20 text-amber-300"
+                    ? "bg-emerald-500 text-slate-950 font-black"
+                    : currentStatus === "pending_verification"
+                    ? "bg-amber-400 text-slate-950 font-bold"
+                    : currentStatus === "inactive"
+                    ? "bg-red-500/20 text-red-300"
+                    : "bg-slate-700 text-slate-300"
                 }`}
               >
-                {currentStatus === "published" ? "Official Published" : "DENR Draft Route"}
+                {currentStatus === "published"
+                  ? "Official Published"
+                  : currentStatus === "pending_verification"
+                  ? "Pending Verification"
+                  : currentStatus === "inactive"
+                  ? "Trail Inactive / Closed"
+                  : "Draft Route"}
               </span>
+
+              {/* Offline availability badge */}
+              {isOfflineAvailable && (
+                <span className="text-[10px] font-bold uppercase bg-blue-500/20 text-blue-300 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                  <WifiOff className="w-3 h-3" /> Offline Cached
+                </span>
+              )}
             </div>
             <h2 className="text-lg md:text-xl font-black text-white mt-0.5 tracking-tight">
               {trailName}
             </h2>
+            <p className="text-xs text-slate-400">{location}</p>
           </div>
         </div>
 
@@ -572,99 +730,171 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
         </div>
       </div>
 
-      {/* Admin Drawing Controls Bar */}
-      {isAdmin && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+      {/* Jump-off point selector for trails with multiple jump-offs (e.g. Mt. Mandalagan) */}
+      {jumpOffOptions.length > 1 && (
+        <div className="bg-slate-100 rounded-2xl p-3 border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider mr-1 flex items-center gap-1.5">
-              <Compass className="w-4 h-4 text-emerald-700" /> Admin Tools:
-            </span>
-            <button
-              type="button"
-              onClick={() => setActiveTool("browse")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                activeTool === "browse"
-                  ? "bg-slate-900 text-white shadow-sm"
-                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-              }`}
-            >
-              Browse Map
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTool("draw")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                activeTool === "draw"
-                  ? "bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/20"
-                  : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
-              }`}
-            >
-              <Plus className="w-3.5 h-3.5" /> Draw Route ({points.length} pts)
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTool("checkpoint")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                activeTool === "checkpoint"
-                  ? "bg-blue-600 text-white shadow-sm ring-2 ring-blue-500/20"
-                  : "bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200"
-              }`}
-            >
-              <Flag className="w-3.5 h-3.5" /> Add Checkpoint
-            </button>
+            <MapPin className="w-4 h-4 text-emerald-700" />
+            <span className="font-bold text-slate-700">Jump-off Trailhead:</span>
           </div>
-
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={handleUndo}
-              disabled={history.length === 0}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-40 transition flex items-center gap-1"
-              title="Undo last added route point"
-            >
-              <Undo2 className="w-3.5 h-3.5" /> Undo
-            </button>
-            <button
-              type="button"
-              onClick={handleClearRoute}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition flex items-center gap-1"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> Clear Route
-            </button>
-            <button
-              type="button"
-              onClick={handleResetToVerified}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition flex items-center gap-1"
-              title="Reset to official NNNP verified GPS trail"
-            >
-              <RotateCcw className="w-3.5 h-3.5" /> Reset Default
-            </button>
-
-            <div className="h-5 w-px bg-slate-200 mx-1" />
-
-            {/* Save Buttons */}
-            <button
-              type="button"
-              onClick={() => handleSave("draft")}
-              disabled={isSaving}
-              className="px-4 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white transition flex items-center gap-1.5 shadow-sm disabled:opacity-60"
-            >
-              <Save className="w-3.5 h-3.5" /> Save Draft
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSave("published")}
-              disabled={isSaving}
-              className="px-4 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1.5 shadow-sm disabled:opacity-60"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" /> Publish Verified
-            </button>
+            {jumpOffOptions.map((jo) => (
+              <button
+                key={jo.id}
+                type="button"
+                onClick={() => onSelectJumpOff && onSelectJumpOff(jo)}
+                className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 ${
+                  selectedJumpOffId === jo.id
+                    ? "bg-emerald-700 text-white shadow-sm"
+                    : "bg-white text-slate-700 hover:bg-slate-200 border border-slate-300"
+                }`}
+              >
+                <span>{jo.name}</span>
+                {jo.isPrimary && (
+                  <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-full uppercase">
+                    Primary
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
       )}
 
+      {/* Admin Drawing Controls Bar */}
+      {isAdmin && (
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider mr-1 flex items-center gap-1.5">
+              <Compass className="w-4 h-4 text-emerald-700" /> Admin Tools:
+            </span>
+
+            {/* Preview toggle */}
+            <button
+              type="button"
+              onClick={() => setPreviewMode(!previewMode)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                previewMode
+                  ? "bg-purple-600 text-white shadow-sm"
+                  : "bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200"
+              }`}
+              title="Preview mode hides drawing overlays and simulates trekker experience"
+            >
+              {previewMode ? <Edit3 className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              {previewMode ? "Exit Preview" : "Trekker Preview"}
+            </button>
+
+            {!previewMode && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveTool("browse")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                    activeTool === "browse"
+                      ? "bg-slate-900 text-white shadow-sm"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  Browse Map
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTool("draw")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                    activeTool === "draw"
+                      ? "bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/20"
+                      : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
+                  }`}
+                >
+                  <Plus className="w-3.5 h-3.5" /> Draw Route ({points.length} pts)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTool("checkpoint")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                    activeTool === "checkpoint"
+                      ? "bg-blue-600 text-white shadow-sm ring-2 ring-blue-500/20"
+                      : "bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200"
+                  }`}
+                >
+                  <Flag className="w-3.5 h-3.5" /> Add Checkpoint
+                </button>
+              </>
+            )}
+          </div>
+
+          {!previewMode && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={history.length === 0}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-40 transition flex items-center gap-1"
+                title="Undo last added route point"
+              >
+                <Undo2 className="w-3.5 h-3.5" /> Undo
+              </button>
+              <button
+                type="button"
+                onClick={handleRedo}
+                disabled={redoStack.length === 0}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-40 transition flex items-center gap-1"
+                title="Redo route modification"
+              >
+                <Redo2 className="w-3.5 h-3.5" /> Redo
+              </button>
+              <button
+                type="button"
+                onClick={handleClearRoute}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition flex items-center gap-1"
+                title="Clear intermediate plotted route points"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Clear
+              </button>
+              <button
+                type="button"
+                onClick={handleResetToVerified}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition flex items-center gap-1"
+                title="Reset to official NNNP verified GPS trail"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Reset
+              </button>
+
+              <div className="h-5 w-px bg-slate-200 mx-1" />
+
+              {/* Status Action Dropdown / Buttons */}
+              <button
+                type="button"
+                onClick={() => handleSave("draft")}
+                disabled={isSaving}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white transition flex items-center gap-1.5 shadow-sm disabled:opacity-60"
+              >
+                <Save className="w-3.5 h-3.5" /> Save Draft
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSave("pending_verification")}
+                disabled={isSaving}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 transition flex items-center gap-1.5 shadow-sm disabled:opacity-60"
+                title="Submit route for DENR verification"
+              >
+                <Clock className="w-3.5 h-3.5" /> Submit Check
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSave("published")}
+                disabled={isSaving}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1.5 shadow-sm disabled:opacity-60"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" /> Publish Official
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Mode Instruction Notice when Admin is Drawing */}
-      {isAdmin && activeTool === "draw" && (
+      {isAdmin && !previewMode && activeTool === "draw" && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Info className="w-4 h-4 text-emerald-700 shrink-0" />
@@ -672,15 +902,15 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
               <strong>Draw Mode Active:</strong> Click on the map to add sequential GPS waypoints along the trail. Drag waypoints to adjust curves or click on any point to delete it.
             </span>
           </div>
-          <span className="font-mono font-bold text-emerald-800">{points.length} GPS Points</span>
+          <span className="font-mono font-bold text-emerald-800 shrink-0 ml-2">{points.length} GPS Points</span>
         </div>
       )}
 
-      {isAdmin && activeTool === "checkpoint" && (
+      {isAdmin && !previewMode && activeTool === "checkpoint" && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900 flex items-center gap-2">
           <Info className="w-4 h-4 text-blue-700 shrink-0" />
           <span>
-            <strong>Checkpoint Mode Active:</strong> Click anywhere along the hiking trail to place a verified checkpoint (e.g., Tinagong Dagat, water springs, emergency shelters).
+            <strong>Checkpoint Mode Active:</strong> Click anywhere along the hiking trail to place a verified checkpoint (e.g., water sources, basecamps, scenic outlooks).
           </span>
         </div>
       )}
@@ -690,7 +920,7 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
         <div ref={mapContainerRef} className="w-full h-full z-0" />
 
         {/* Floating Strava Legend / Key */}
-        <div className="absolute top-4 left-4 z-[400] bg-white/95 backdrop-blur-md rounded-2xl p-3.5 shadow-lg border border-slate-200 text-xs space-y-2 pointer-events-auto max-w-[240px]">
+        <div className="absolute top-4 left-4 z-[400] bg-white/95 backdrop-blur-md rounded-2xl p-3.5 shadow-lg border border-slate-200 text-xs space-y-2 pointer-events-auto max-w-[260px]">
           <div className="font-bold text-slate-900 flex items-center justify-between">
             <span>Trail Route Legend</span>
             <button
@@ -705,37 +935,53 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
           <div className="space-y-1.5 text-[11px] text-slate-700">
             <div className="flex items-center gap-2">
               <span className="w-4 h-1.5 bg-emerald-500 rounded-full inline-block shadow-xs" />
-              <span className="font-medium">Strava GPS Polyline</span>
+              <span className="font-medium">Strava GPS Polyline ({points.length} pts)</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 bg-emerald-500 border border-white rounded-full inline-flex items-center justify-center text-[8px] font-bold text-white shadow-xs">
                 S
               </span>
-              <span>Start: Old Hospital, Patag</span>
+              <span className="truncate">Start: {startPointName}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 bg-red-500 border border-white rounded-full inline-flex items-center justify-center text-[8px] font-bold text-white shadow-xs">
                 ★
               </span>
-              <span>Destination: Mt. Mandalagan Peak</span>
+              <span className="truncate">Destination: {destinationName}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 bg-blue-500 border border-white rounded-full inline-flex items-center justify-center text-[8px] font-bold text-white shadow-xs">
                 ⛺
               </span>
-              <span>Verified Checkpoints</span>
+              <span>{checkpoints.length} Checkpoints</span>
             </div>
           </div>
         </div>
 
-        {/* Reset View Button */}
-        <button
-          type="button"
-          onClick={fitRouteBounds}
-          className="absolute bottom-6 left-6 z-[400] bg-white hover:bg-slate-50 text-slate-800 font-bold px-3.5 py-2 rounded-2xl shadow-lg border border-slate-200 text-xs flex items-center gap-2 transition"
-        >
-          <Maximize2 className="w-3.5 h-3.5 text-emerald-700" /> Center Trail View
-        </button>
+        {/* Floating Offline / Action Buttons */}
+        <div className="absolute bottom-6 left-6 z-[400] flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={fitRouteBounds}
+            className="bg-white hover:bg-slate-50 text-slate-800 font-bold px-3.5 py-2 rounded-2xl shadow-lg border border-slate-200 text-xs flex items-center gap-2 transition"
+          >
+            <Maximize2 className="w-3.5 h-3.5 text-emerald-700" /> Center Trail
+          </button>
+
+          {/* Download for Offline Use Button */}
+          <button
+            type="button"
+            onClick={() => setShowOfflineModal(true)}
+            className={`font-bold px-3.5 py-2 rounded-2xl shadow-lg border text-xs flex items-center gap-2 transition ${
+              isOfflineAvailable
+                ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
+                : "bg-white hover:bg-slate-50 text-slate-800 border-slate-200"
+            }`}
+          >
+            <Download className="w-3.5 h-3.5 text-blue-600" />
+            {isOfflineAvailable ? "Offline Ready" : "Download Offline"}
+          </button>
+        </div>
       </div>
 
       {/* Checkpoints Overview Cards */}
@@ -752,38 +998,44 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {checkpoints.map((cp, idx) => (
-            <div
-              key={cp.id || idx}
-              className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 hover:bg-blue-50/40 hover:border-blue-200 transition space-y-2"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <h4 className="font-bold text-slate-900 text-sm">{cp.name}</h4>
-                {cp.elevation && (
-                  <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full shrink-0">
-                    {cp.elevation}
-                  </span>
+        {checkpoints.length === 0 ? (
+          <div className="text-center py-8 text-slate-400 text-xs">
+            No checkpoints added yet. Administrators can click "Add Checkpoint" to place verified trail waypoints.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {checkpoints.map((cp, idx) => (
+              <div
+                key={cp.id || idx}
+                className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 hover:bg-blue-50/40 hover:border-blue-200 transition space-y-2"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <h4 className="font-bold text-slate-900 text-sm">{cp.name}</h4>
+                  {cp.elevation && (
+                    <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full shrink-0">
+                      {cp.elevation}
+                    </span>
+                  )}
+                </div>
+                {cp.description && (
+                  <p className="text-xs text-slate-600 leading-relaxed">{cp.description}</p>
                 )}
+                <div className="text-[10px] font-mono text-slate-400 pt-1 border-t border-slate-200 flex items-center justify-between">
+                  <span>GPS: {cp.lat.toFixed(4)}° N, {cp.lng.toFixed(4)}° E</span>
+                  {isAdmin && !previewMode && (
+                    <button
+                      type="button"
+                      onClick={() => setCheckpoints((prev) => prev.filter((c) => c.id !== cp.id))}
+                      className="text-red-600 hover:text-red-800 font-sans font-bold text-[11px]"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
               </div>
-              {cp.description && (
-                <p className="text-xs text-slate-600 leading-relaxed">{cp.description}</p>
-              )}
-              <div className="text-[10px] font-mono text-slate-400 pt-1 border-t border-slate-200 flex items-center justify-between">
-                <span>GPS: {cp.lat.toFixed(4)}° N, {cp.lng.toFixed(4)}° E</span>
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => setCheckpoints((prev) => prev.filter((c) => c.id !== cp.id))}
-                    className="text-red-600 hover:text-red-800 font-sans font-bold text-[11px]"
-                  >
-                    Delete
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Modal for adding a new checkpoint */}
@@ -859,6 +1111,78 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
               >
                 Save Checkpoint Pin
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Offline Management Modal */}
+      {showOfflineModal && (
+        <div className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 border border-slate-200 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-2 text-blue-700 font-bold text-sm uppercase tracking-wider">
+              <Download className="w-4 h-4" /> Offline Trail Data Management
+            </div>
+            <h3 className="text-xl font-black text-slate-900">{trailName}</h3>
+
+            <div className="space-y-3 text-xs text-slate-600">
+              <p>
+                Download verified GPS coordinates, route polyline, checkpoints, and safety instructions to your device browser cache for offline access during remote mountain treks.
+              </p>
+
+              <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-amber-900 space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  Important Offline Storage Notice:
+                </div>
+                <p className="text-[11px] leading-relaxed">
+                  Downloading stores the complete <strong>GPS trail route coordinates</strong> and <strong>checkpoints</strong> for offline viewing and navigation. Background map tiles (satellite/streets) are streamed via OpenStreetMap and require network access unless previously cached by your browser.
+                </p>
+              </div>
+
+              {isOfflineAvailable && (
+                <div className="p-3 bg-blue-50 rounded-xl border border-blue-200 text-blue-900 flex items-center justify-between">
+                  <span className="font-semibold">Status: Stored on this device</span>
+                  <span className="text-[10px] text-blue-700">Ready for offline use</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100">
+              {isOfflineAvailable ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleRemoveOffline();
+                    setShowOfflineModal(false);
+                  }}
+                  className="px-3 py-2 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 transition"
+                >
+                  Remove Offline Data
+                </button>
+              ) : (
+                <div />
+              )}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowOfflineModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownloadOffline();
+                    setShowOfflineModal(false);
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition shadow-sm"
+                >
+                  {isOfflineAvailable ? "Update / Refresh Data" : "Download Now"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

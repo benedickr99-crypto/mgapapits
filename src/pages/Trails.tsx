@@ -1,16 +1,24 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { MapPin, Mountain, ArrowRight } from "lucide-react";
+import { MapPin, Mountain, ArrowRight, Navigation, WifiOff, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
 import { getCached, setCached } from "@/lib/cache";
 import { getTrailImage } from "@/lib/trailData";
+import { isTrailAvailableOffline } from "@/lib/offlineTrails";
 
 type Trail = Tables<"trails">;
 
-
+function getTrailKey(trailName: string): string {
+  const clean = trailName.toLowerCase();
+  if (clean.includes("mandalagan")) return "mt-mandalagan";
+  if (clean.includes("silay")) return "mt-silay";
+  if (clean.includes("marapara")) return "mt-marapara";
+  if (clean.includes("kumalisikis") || clean.includes("malatan")) return "kumalisikis";
+  return "mt-mandalagan";
+}
 
 const Trails = () => {
   // INSTANT LOAD from cache
@@ -61,12 +69,11 @@ const Trails = () => {
           </div>
 
           <h1 className="mt-6 text-4xl md:text-5xl font-bold">
-            Explore Trails
+            Explore Trails & GPS Mapping
           </h1>
 
           <p className="mt-3 text-white/80 max-w-xl">
-            Choose your adventure. Each trail offers a unique trekking
-            experience with breathtaking views and natural beauty.
+            Choose your adventure. View continuous Strava-style GPS route maps, verified checkpoints, and book your DENR accredited guide.
           </p>
         </div>
       </section>
@@ -82,61 +89,100 @@ const Trails = () => {
             <p className="text-gray-500">No trails available at the moment.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {trails.map((trail) => (
-              <div
-                key={trail.id}
-                className="animate-on-scroll card-hover group bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-lg hover:-translate-y-1 transition-all duration-300 h-full flex flex-col"
-              >
-                {/* TRAIL PHOTO */}
-                <div className="relative h-56 overflow-hidden bg-slate-900">
-                  <img
-                    src={getTrailImage(trail.name)}
-                    alt={trail.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8">
+            {trails.map((trail) => {
+              const trailKey = getTrailKey(trail.name);
+              const isOffline = isTrailAvailableOffline(trailKey);
 
+              return (
+                <div
+                  key={trail.id}
+                  className="animate-on-scroll card-hover group bg-white rounded-3xl overflow-hidden shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 h-full flex flex-col border border-slate-100"
+                >
+                  {/* TRAIL PHOTO */}
+                  <div className="relative h-64 overflow-hidden bg-slate-900">
+                    <img
+                      src={getTrailImage(trail.name)}
+                      alt={trail.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
+                    {/* Top badges */}
+                    <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
+                      <span className="text-xs font-bold text-white bg-emerald-700/90 backdrop-blur-xs px-3 py-1 rounded-full uppercase tracking-wider">
+                        {trail.difficulty || "Moderate"}
+                      </span>
+                      {isOffline && (
+                        <span className="text-[10px] font-bold text-white bg-blue-600/90 backdrop-blur-xs px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-sm">
+                          <WifiOff size={12} /> Offline Cached
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Title overlay */}
+                    <div className="absolute bottom-4 left-4 right-4 text-white">
+                      <h2 className="text-2xl font-black drop-shadow-sm flex items-center gap-2">
+                        <Mountain size={20} className="text-emerald-400 shrink-0" />
+                        {trail.name}
+                      </h2>
+                      <p className="text-xs text-white/80 mt-0.5 flex items-center gap-1">
+                        <MapPin size={12} />
+                        {trail.barangay && trail.barangay !== "N/A"
+                          ? `${trail.barangay}, ${trail.city}`
+                          : trail.city}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* CONTENT */}
+                  <div className="p-6 flex flex-col flex-grow space-y-4">
+                    {trail.description && (
+                      <p className="text-sm text-gray-600 leading-relaxed flex-grow">
+                        {trail.description}
+                      </p>
+                    )}
+
+                    {/* Trail Specs Info */}
+                    <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                      <div>
+                        <span className="text-slate-400 block font-semibold">GPS Route Status</span>
+                        <span className="font-bold text-slate-800 flex items-center gap-1 mt-0.5">
+                          <CheckCircle2 size={13} className="text-emerald-600" />
+                          {trail.route_status === "published" ? "Official Verified" : "Available"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-semibold">Capacity</span>
+                        <span className="font-bold text-slate-800 mt-0.5 block">
+                          {trail.weekly_slots
+                            ? `${trail.weekly_slots} slots`
+                            : "Guided departures"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* ACTION BUTTONS */}
+                    <div className="grid grid-cols-2 gap-3 pt-2">
+                      <Link
+                        to={`/navigation?trail=${trailKey}`}
+                        className="inline-flex items-center justify-center gap-2 text-xs font-bold py-3 px-4 rounded-xl border border-emerald-600 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100 transition shadow-xs"
+                      >
+                        <Navigation size={14} /> View GPS Map
+                      </Link>
+
+                      <Link
+                        to={`/booking?trailId=${trail.id}`}
+                        className="inline-flex items-center justify-center gap-2 text-xs font-bold py-3 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white transition shadow-sm"
+                      >
+                        Book Trail <ArrowRight size={14} />
+                      </Link>
+                    </div>
+                  </div>
                 </div>
-
-                {/* CONTENT */}
-                <div className="p-6 flex flex-col flex-grow">
-                  <h2 className="text-xl font-semibold flex items-center gap-2">
-                    <Mountain size={18} />
-                    {trail.name}
-                  </h2>
-
-                  <p className="text-sm text-gray-500 mt-1">
-                    {trail.barangay}, {trail.city}
-                  </p>
-
-                  {trail.description && (
-                    <p className="text-sm text-gray-600 mt-3 flex-grow">
-                      {trail.description}
-                    </p>
-                  )}
-
-                  {trail.weekly_slots && (
-                    <p className="text-xs text-gray-400 mt-2">
-                      {trail.name.toLowerCase().includes("kumalisikis") || trail.name.toLowerCase().includes("kumaliskis")
-                        ? "Weekly slots: "
-                        : "Monthly slots: "}
-                      {trail.weekly_slots}
-                    </p>
-                  )}
-
-                  {/* BUTTON */}
-                  <Link
-                    to={`/booking?trailId=${trail.id}`}
-                    className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-emerald-700 hover:text-emerald-800 hover:underline"
-                  >
-                    Book this trail <ArrowRight size={14} />
-                  </Link>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
