@@ -15,8 +15,8 @@ function getTrailKey(trailName: string): string {
   const clean = trailName.toLowerCase();
   if (clean.includes("mandalagan")) return "mt-mandalagan";
   if (clean.includes("silay")) return "mt-silay";
-  if (clean.includes("marapara")) return "mt-marapara";
-  if (clean.includes("kumalisikis") || clean.includes("malatan")) return "kumalisikis";
+  if (clean.includes("canlandog") || clean.includes("marapara")) return "mt-canlandog";
+  if (clean.includes("malatan") || clean.includes("kumalisikis") || clean.includes("kumaliskis")) return "malatan-og";
   return "mt-mandalagan";
 }
 

@@ -37,15 +37,24 @@ import {
   saveTrailForOffline,
 } from "@/lib/offlineTrails";
 
+const PRIMARY_TRAIL_KEYS = ["mt-mandalagan", "mt-silay", "mt-canlandog", "malatan-og"] as const;
+
 export default function MapNavigation() {
   const { isAdmin, loading: authLoading } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Selected trail key from URL or default to mt-mandalagan
-  const initialKey = searchParams.get("trail") || "mt-mandalagan";
-  const [selectedTrailKey, setSelectedTrailKey] = useState<string>(
-    FOUR_TRAILS_CONFIG[initialKey] ? initialKey : "mt-mandalagan"
-  );
+  const urlTrailParam = searchParams.get("trail") || "mt-mandalagan";
+  const resolvedKey =
+    urlTrailParam === "mt-marapara"
+      ? "mt-canlandog"
+      : urlTrailParam === "kumalisikis"
+      ? "malatan-og"
+      : FOUR_TRAILS_CONFIG[urlTrailParam]
+      ? urlTrailParam
+      : "mt-mandalagan";
+
+  const [selectedTrailKey, setSelectedTrailKey] = useState<string>(resolvedKey);
 
   const trailConfig = FOUR_TRAILS_CONFIG[selectedTrailKey] || FOUR_TRAILS_CONFIG["mt-mandalagan"];
   const trailMeta = NNNP_TRAILS_METADATA[selectedTrailKey] || NNNP_TRAILS_METADATA["mt-mandalagan"];
@@ -323,7 +332,8 @@ export default function MapNavigation() {
 
         {/* Trail Selector Bar - 4 TRAILS */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {Object.entries(FOUR_TRAILS_CONFIG).map(([key, config]) => {
+          {PRIMARY_TRAIL_KEYS.map((key) => {
+            const config = FOUR_TRAILS_CONFIG[key];
             const isSelected = selectedTrailKey === key;
             const meta = NNNP_TRAILS_METADATA[key] || trailMeta;
             const isOffline = isTrailAvailableOffline(key);
@@ -425,6 +435,7 @@ export default function MapNavigation() {
                 trailKey={selectedTrailKey}
                 initialPoints={routePoints}
                 initialCheckpoints={checkpoints}
+                referenceLocations={trailConfig.referenceLocations}
                 isAdmin={isAdmin}
                 onSaveRoute={handleSaveRoute}
                 trailName={trailConfig.name}
@@ -494,6 +505,28 @@ export default function MapNavigation() {
                 <p className="text-xs text-slate-500 mt-0.5">Accredited guide required</p>
               </div>
             </div>
+
+            {/* Intermediate Reference Location Card (e.g. Tinagong Dagat Peak for Mt. Silay) */}
+            {trailConfig.referenceLocations && trailConfig.referenceLocations.length > 0 && (
+              <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-5 shadow-xs">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] uppercase font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
+                    Intermediate Reference Location (Not automatically on route)
+                  </span>
+                </div>
+                <h4 className="font-extrabold text-slate-900 text-sm mt-1">
+                  {trailConfig.referenceLocations[0].name}
+                </h4>
+                <p className="text-xs text-amber-900 mt-0.5">
+                  Elevation: {trailConfig.referenceLocations[0].elevation} (GPS:{" "}
+                  {trailConfig.referenceLocations[0].lat.toFixed(6)}° N,{" "}
+                  {trailConfig.referenceLocations[0].lng.toFixed(6)}° E)
+                </p>
+                <p className="text-xs text-slate-600 mt-1 italic">
+                  {trailConfig.referenceLocations[0].description}
+                </p>
+              </div>
+            )}
 
             {/* Safety Guidelines */}
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">

@@ -48,23 +48,22 @@ export const NNNP_TRAILS_METADATA: Record<string, TrailDetail> = {
     difficulty: "Challenging",
     maxCapacityPerSlot: 15,
     timeSlots: ["05:00 AM - Sunrise Trek", "07:00 AM - Morning Trek"],
-    lat: 10.6865,
-    lng: 123.1873,
+    lat: 10.6946,
+    lng: 123.1742,
     imageUrl: "/images/trails/mt-mandalagan.jpg",
     meetingPoint: {
-      name: "Patag Eco-Tourism Park / DENR Outpost",
+      name: "Old Hospital / Patag Eco-Tourism Park",
       description: "DENR Registration and Briefing Center before starting the ascent.",
-      landmark: "Near Patag Hospital Ruins & Eco-Tourism Center",
+      landmark: "Old Hospital, Barangay Patag, Silay City",
       address: "Sitio Patag, Brgy. Patag, Silay City, Negros Occidental",
     },
     navigationUrls: {
-      googleMaps: "https://www.google.com/maps/search/?api=1&query=10.6865,123.1873",
-      waze: "https://waze.com/ul?ll=10.6865,123.1873&navigate=yes",
+      googleMaps: "https://www.google.com/maps/search/?api=1&query=10.6946,123.1742",
+      waze: "https://waze.com/ul?ll=10.6946,123.1742&navigate=yes",
     },
     highlights: [
-      "Tinagong Dagat (Hidden Sea / High Caldera)",
-      "Sulfur vent viewing area",
-      "Pristine mossy rainforest canopy",
+      "Tinagong Dagat (Hidden Sea / High Caldera lakebed)",
+      "Sulfur vent viewing area and mossy rainforest canopy",
       "Visayan spotted deer & hornbill sanctuary",
     ],
     equipmentNeeded: [
@@ -81,8 +80,8 @@ export const NNNP_TRAILS_METADATA: Record<string, TrailDetail> = {
     ],
   },
   "mt-silay": {
-    name: "Mt. Silay (Cabatangan Trail)",
-    alias: "Cabatangan Trail",
+    name: "Mt. Silay Trail",
+    alias: "Campuestohan to Mt. Silay Summit",
     mountain: "Mount Silay",
     barangay: "Brgy. Cabatangan",
     city: "Talisay City",
@@ -92,23 +91,23 @@ export const NNNP_TRAILS_METADATA: Record<string, TrailDetail> = {
     difficulty: "Moderate",
     maxCapacityPerSlot: 20,
     timeSlots: ["05:00 AM - Sunrise Trek", "07:00 AM - Morning Trek", "01:00 PM - Afternoon Trek"],
-    lat: 10.7412,
-    lng: 123.1368,
+    lat: 10.600000,
+    lng: 123.133333,
     imageUrl: "/images/trails/mt-silay.jpg",
     meetingPoint: {
-      name: "Cabatangan Barangay Hall / Forest Ranger Station",
-      description: "Meeting hall for guide assignment and safety briefing.",
-      landmark: "Adjacent to Cabatangan Elementary School",
-      address: "Brgy. Cabatangan, Talisay City, Negros Occidental",
+      name: "Sitio Campuestohan / Campuestohan Highland Area",
+      description: "Guide dispatch and safety briefing point at 800m elevation.",
+      landmark: "Sitio Campuestohan, Barangay Cabatangan",
+      address: "Brgy. Cabatangan, Talisay City, Negros Occidental (10°36'N, 123°08'E)",
     },
     navigationUrls: {
-      googleMaps: "https://www.google.com/maps/search/?api=1&query=10.7412,123.1368",
-      waze: "https://waze.com/ul?ll=10.7412,123.1368&navigate=yes",
+      googleMaps: "https://www.google.com/maps/search/?api=1&query=10.600000,123.133333",
+      waze: "https://waze.com/ul?ll=10.600000,123.133333&navigate=yes",
     },
     highlights: [
-      "WWII Historical bomber plane wreckage",
+      "WWII Historical bomber plane wreckage site",
       "Panoramic views of Panay Gulf & Bacolod skyline",
-      "Rich endemic bird habitat",
+      "Geographical vantage of Mt. Mandalagan / Tinagong Dagat Peak",
     ],
     equipmentNeeded: [
       "Trail footwear",
@@ -119,37 +118,38 @@ export const NNNP_TRAILS_METADATA: Record<string, TrailDetail> = {
     safetyGuidelines: [
       "Do not tamper with or move artifacts around the aircraft wreckage site.",
       "Maintain trail discipline on steep ridges.",
+      "Tinagong Dagat is an intermediate geographical reference; stay on verified Silay trail path.",
     ],
   },
-  "mt-marapara": {
-    name: "Mt. Marapara (Canlandog Trail)",
-    alias: "Canlandog Trail",
-    mountain: "Mount Marapara",
+  "mt-canlandog": {
+    name: "Mt. Canlandog Trail",
+    alias: "Canlandog to Canlandog Peak",
+    mountain: "Mount Canlandog",
     barangay: "Brgy. Canlandog",
     city: "Murcia",
-    elevation: "1,200 MASL",
+    elevation: "987 MASL",
     distance: "9.2 km",
     duration: "4 - 5 hours",
     difficulty: "Moderate",
     maxCapacityPerSlot: 25,
     timeSlots: ["05:00 AM - Sunrise Trek", "07:00 AM - Morning Trek", "01:00 PM - Afternoon Trek"],
-    lat: 10.6054,
-    lng: 123.0841,
+    lat: 10.6074,
+    lng: 123.1365,
     imageUrl: "/images/trails/mt-marapara.jpg",
     meetingPoint: {
-      name: "Canlandog Community Tourism Station",
-      description: "Guide dispatch counter and registration desk.",
-      landmark: "Near Canlandog Barangay Plaza",
-      address: "Brgy. Canlandog, Murcia, Negros Occidental",
+      name: "Barangay Canlandog Center",
+      description: "Community tourism station and registration desk at 452m elevation.",
+      landmark: "Canlandog Barangay Center (Alternate: Lopez Jaena Route)",
+      address: "Brgy. Canlandog, Murcia, Negros Occidental (10.6074°N, 123.1365°E)",
     },
     navigationUrls: {
-      googleMaps: "https://www.google.com/maps/search/?api=1&query=10.6054,123.0841",
-      waze: "https://waze.com/ul?ll=10.6054,123.0841&navigate=yes",
+      googleMaps: "https://www.google.com/maps/search/?api=1&query=10.6074,123.1365",
+      waze: "https://waze.com/ul?ll=10.6074,123.1365&navigate=yes",
     },
     highlights: [
-      "Dense pine groves & highland breeze",
-      "Cascading mountain springs & river crossings",
-      "Viewdeck overlooking Bago river valley",
+      "Ascent to Mount Canlandog Peak (987 MASL)",
+      "Highland pine ridges and Bago river tributaries",
+      "Optional verified Lopez Jaena jump-off route",
     ],
     equipmentNeeded: [
       "Quick-dry trekking apparel",
@@ -159,49 +159,54 @@ export const NNNP_TRAILS_METADATA: Record<string, TrailDetail> = {
     safetyGuidelines: [
       "Exercise caution during rainy periods as river currents can rise.",
       "Always follow guide instructions at water crossings.",
+      "Independent trail from Mt. Marapara; confirm trail entrance before dispatch.",
     ],
   },
-  "kumalisikis": {
-    name: "Kumalisikis Trail",
-    alias: "Kumalisikis Nature Path",
+  "malatan-og": {
+    name: "Malatan-og Viewing Deck to Malatan-og Falls",
+    alias: "Malatan-og Falls Trail",
     mountain: "Don Salvador Benedicto Highlands",
     barangay: "Brgy. Kumaliskis",
     city: "Don Salvador Benedicto",
-    elevation: "950 MASL",
+    elevation: "820 MASL to 650 MASL Basin",
     distance: "5.5 km",
     duration: "2 - 3 hours",
     difficulty: "Easy",
     maxCapacityPerSlot: 30,
     timeSlots: ["05:00 AM - Sunrise Trek", "07:00 AM - Morning Trek", "01:00 PM - Afternoon Trek"],
-    lat: 10.5698,
-    lng: 123.2384,
+    lat: 10.58755,
+    lng: 123.23221,
     imageUrl: "/images/trails/kumalisikis.jpg",
     meetingPoint: {
-      name: "DSB Tourist Assistance & Tourism Center",
-      description: "Scenic outpost with parking and registration amenities.",
-      landmark: "Along Eco-Tourism Highway beside DSB Welcome Arch",
-      address: "Brgy. Kumaliskis, Don Salvador Benedicto, Negros Occidental",
+      name: "Malatan-og Viewing Deck",
+      description: "Scenic roadside deck along the Eco-Tourism Highway (Plus Code: H6QJ+2V2).",
+      landmark: "Malatan-og Viewing Deck, Eco-Tourism Highway",
+      address: "Brgy. Kumaliskis, Don Salvador Benedicto, Negros Occidental (10.58755°N, 123.23221°E)",
     },
     navigationUrls: {
-      googleMaps: "https://www.google.com/maps/search/?api=1&query=10.5698,123.2384",
-      waze: "https://waze.com/ul?ll=10.5698,123.2384&navigate=yes",
+      googleMaps: "https://www.google.com/maps/search/?api=1&query=10.58755,123.23221",
+      waze: "https://waze.com/ul?ll=10.58755,123.23221&navigate=yes",
     },
     highlights: [
-      "Lantawan Viewdeck & pine tree lined highway",
-      "Malatan-og and Mag-aso waterfalls viewing points",
-      "Gentle walking paths suitable for families & beginners",
+      "Malatan-og Viewing Deck panoramic canyon views (Plus Code H6QJ+2V2)",
+      "Cold mountain river canyon and Malatan-og Falls natural pool (Plus Code 7Q25H6VH+H3)",
+      "Lantawan pine tree forest paths",
     ],
     equipmentNeeded: [
-      "Comfortable walking shoes or sneakers",
-      "Sun protection (hat, sunscreen)",
+      "Comfortable walking shoes or sneakers with grip",
+      "Sun protection & light rain jacket",
       "Hydration bottle",
     ],
     safetyGuidelines: [
-      "Stay on designated trails.",
-      "Properly dispose of all trash in designated bins.",
+      "Steps down to the falls can become slippery when damp.",
+      "Stay on designated walkways and keep the river basin clean.",
     ],
   },
 };
+
+// Aliases for backward compatibility
+NNNP_TRAILS_METADATA["mt-marapara"] = NNNP_TRAILS_METADATA["mt-canlandog"];
+NNNP_TRAILS_METADATA["kumalisikis"] = NNNP_TRAILS_METADATA["malatan-og"];
 
 export function getTrailMetadata(trailNameOrId?: string | null): TrailDetail {
   if (!trailNameOrId) return NNNP_TRAILS_METADATA["mt-mandalagan"];
@@ -213,11 +218,11 @@ export function getTrailMetadata(trailNameOrId?: string | null): TrailDetail {
   if (clean.includes("silay") || clean.includes("cabatangan")) {
     return NNNP_TRAILS_METADATA["mt-silay"];
   }
-  if (clean.includes("marapara") || clean.includes("canlandog")) {
-    return NNNP_TRAILS_METADATA["mt-marapara"];
+  if (clean.includes("canlandog") || clean.includes("marapara")) {
+    return NNNP_TRAILS_METADATA["mt-canlandog"];
   }
-  if (clean.includes("kumalisikis") || clean.includes("kumaliskis") || clean.includes("dsb")) {
-    return NNNP_TRAILS_METADATA["kumalisikis"];
+  if (clean.includes("malatan") || clean.includes("kumalisikis") || clean.includes("kumaliskis") || clean.includes("dsb")) {
+    return NNNP_TRAILS_METADATA["malatan-og"];
   }
 
   return NNNP_TRAILS_METADATA["mt-mandalagan"];

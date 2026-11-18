@@ -218,11 +218,10 @@ const PaginationControls = ({
                 {hasGap && <span className="px-1 text-slate-400">...</span>}
                 <button
                   onClick={() => onPageChange(page)}
-                  className={`w-7 h-7 rounded-lg text-xs font-bold transition cursor-pointer ${
-                    currentPage === page
+                  className={`w-7 h-7 rounded-lg text-xs font-bold transition cursor-pointer ${currentPage === page
                       ? "bg-emerald-600 text-white shadow-xs"
                       : "border border-slate-200 text-slate-700 hover:bg-slate-50"
-                  }`}
+                    }`}
                 >
                   {page}
                 </button>
@@ -1997,13 +1996,13 @@ export default function Admin() {
                     Mt. Silay
                   </Link>
                   <Link
-                    to="/navigation?trail=mt-marapara"
+                    to="/navigation?trail=mt-canlandog"
                     className="px-3 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-bold transition shadow-2xs"
                   >
-                    Mt. Marapara
+                    Mt. Canlandog
                   </Link>
                   <Link
-                    to="/navigation?trail=kumalisikis"
+                    to="/navigation?trail=malatan-og"
                     className="px-3 py-1.5 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-bold transition shadow-2xs"
                   >
                     Malatan-og Falls
@@ -2012,7 +2011,10 @@ export default function Admin() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {Object.entries(NNNP_TRAILS_METADATA).map(([id, trail]) => (
+                {(["mt-mandalagan", "mt-silay", "mt-canlandog", "malatan-og"] as const).map((id) => {
+                  const trail = NNNP_TRAILS_METADATA[id];
+                  if (!trail) return null;
+                  return (
                   <div key={id} className="border border-slate-200 rounded-2xl p-5 space-y-4 bg-slate-50/50">
                     <div className="flex items-start justify-between">
                       <div>
@@ -2055,7 +2057,8 @@ export default function Admin() {
                       </a>
                     </div>
                   </div>
-                ))}
+                );
+              })}
               </div>
             </div>
           )}
@@ -2982,8 +2985,8 @@ export default function Admin() {
                   type="button"
                   onClick={() => setRejectionReason(preset)}
                   className={`text-[11px] px-2.5 py-1.5 rounded-xl border transition font-medium text-left ${rejectionReason === preset
-                      ? "bg-red-600 text-white border-red-600"
-                      : "bg-red-50 text-red-800 border-red-200 hover:bg-red-100"
+                    ? "bg-red-600 text-white border-red-600"
+                    : "bg-red-50 text-red-800 border-red-200 hover:bg-red-100"
                     }`}
                 >
                   {preset}

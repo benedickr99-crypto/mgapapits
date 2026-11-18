@@ -4,6 +4,7 @@ import {
   RoutePoint,
   CheckpointItem,
   JumpOffOption,
+  ReferenceLocation,
   TrailRouteStatus,
   calculateTotalDistance,
   MANDALAGAN_DEFAULT_START,
@@ -104,10 +105,12 @@ const createWaypointIcon = (index: number) => {
 const startIcon = createCustomPin("#10b981", "S"); // Strava vibrant green
 const destinationIcon = createCustomPin("#ef4444", "★"); // Bright red mountain summit
 const checkpointIcon = createCustomPin("#3b82f6", "⛺"); // Blue tent for checkpoints
+const referenceIcon = createCustomPin("#f59e0b", "📍"); // Amber pin for intermediate reference locations
 
 interface StravaTrailMapProps {
   initialPoints?: RoutePoint[];
   initialCheckpoints?: CheckpointItem[];
+  referenceLocations?: ReferenceLocation[];
   isAdmin?: boolean;
   trailKey?: string;
   trailName?: string;
@@ -133,6 +136,7 @@ interface StravaTrailMapProps {
 export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
   initialPoints,
   initialCheckpoints,
+  referenceLocations = [],
   isAdmin = false,
   trailKey = "mt-mandalagan",
   trailName = "Mount Mandalagan Summit Trail",
@@ -157,6 +161,7 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
   const glowPolylineLayerRef = useRef<L.Polyline | null>(null);
   const markersLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const checkpointsLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const referencesLayerGroupRef = useRef<L.LayerGroup | null>(null);
 
   // Route state
   const [points, setPoints] = useState<RoutePoint[]>(() => {
@@ -256,6 +261,7 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
     // Create layer groups
     markersLayerGroupRef.current = L.layerGroup().addTo(map);
     checkpointsLayerGroupRef.current = L.layerGroup().addTo(map);
+    referencesLayerGroupRef.current = L.layerGroup().addTo(map);
 
     mapInstanceRef.current = map;
     setMapReady(true);
@@ -532,6 +538,36 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
       checkpointsLayerGroupRef.current?.addLayer(marker);
     });
   }, [checkpoints, isAdmin, previewMode]);
+
+  // Re-render Intermediate Reference Location Markers (e.g. Tinagong Dagat Peak for Mt. Silay)
+  useEffect(() => {
+    if (!referencesLayerGroupRef.current) return;
+    referencesLayerGroupRef.current.clearLayers();
+
+    if (referenceLocations && referenceLocations.length > 0) {
+      referenceLocations.forEach((ref) => {
+        const marker = L.marker([ref.lat, ref.lng], {
+          icon: referenceIcon,
+          title: `Reference Location: ${ref.name}`,
+        });
+
+        marker.bindPopup(`
+          <div style="font-family: sans-serif; min-width: 210px;">
+            <span style="background: #f59e0b; color: white; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: bold; text-transform: uppercase;">
+              Geographical Reference
+            </span>
+            <h4 style="font-size: 14px; font-weight: 800; margin: 6px 0 2px 0; color: #111827;">${ref.name}</h4>
+            ${ref.elevation ? `<p style="font-size: 11px; font-weight: 600; color: #b45309; margin: 2px 0;">⛰ Elevation: ${ref.elevation}</p>` : ""}
+            <p style="font-size: 11px; color: #4b5563; margin: 4px 0;">${ref.description}</p>
+            ${ref.originalRef ? `<p style="font-size: 10px; color: #6b7280; font-style: italic;">Ref: ${ref.originalRef}</p>` : ""}
+            <p style="font-size: 10px; color: #9ca3af; margin-top: 4px; font-family: monospace;">GPS: ${ref.lat.toFixed(6)}, ${ref.lng.toFixed(6)}</p>
+          </div>
+        `);
+
+        referencesLayerGroupRef.current?.addLayer(marker);
+      });
+    }
+  }, [referenceLocations]);
 
   // Fit bounds to show entire route
   const fitRouteBounds = () => {
@@ -949,6 +985,14 @@ export const StravaTrailMap: React.FC<StravaTrailMapProps> = ({
               </span>
               <span className="truncate">Destination: {destinationName}</span>
             </div>
+            {referenceLocations && referenceLocations.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 bg-amber-500 border border-white rounded-full inline-flex items-center justify-center text-[8px] font-bold text-white shadow-xs">
+                  📍
+                </span>
+                <span className="truncate">Reference: {referenceLocations[0].name}</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 bg-blue-500 border border-white rounded-full inline-flex items-center justify-center text-[8px] font-bold text-white shadow-xs">
                 ⛺

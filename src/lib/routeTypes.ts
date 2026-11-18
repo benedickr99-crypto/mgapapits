@@ -12,13 +12,25 @@ export interface CheckpointItem {
   description?: string;
 }
 
+export interface ReferenceLocation {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  elevation?: string;
+  description: string;
+  originalRef?: string;
+}
+
 export interface JumpOffOption {
   id: string;
   name: string;
   location: string;
   lat: number;
   lng: number;
+  elevation?: string;
   isPrimary?: boolean;
+  notes?: string;
 }
 
 export type TrailRouteStatus = "draft" | "pending_verification" | "published" | "inactive";
@@ -31,11 +43,13 @@ export interface TrailRouteConfig {
   mountain: string;
   primaryJumpOff: JumpOffOption;
   alternateJumpOffs?: JumpOffOption[];
+  referenceLocations?: ReferenceLocation[];
   destination: {
     name: string;
     lat: number;
     lng: number;
     elevation?: string;
+    originalRef?: string;
   };
   defaultPoints: RoutePoint[];
   defaultCheckpoints: CheckpointItem[];
@@ -68,7 +82,7 @@ export interface TrailGeoJSON {
       };
       properties: {
         name: string;
-        pointType: "start" | "destination" | "checkpoint";
+        pointType: "start" | "destination" | "checkpoint" | "reference";
         elevation?: string;
         description?: string;
       };
@@ -172,134 +186,152 @@ export const DEFAULT_MANDALAGAN_CHECKPOINTS: CheckpointItem[] = [
 ];
 
 // -------------------------------------------------------------
-// 2. MT. SILAY TRAIL
-// Jump-off: Sitio Campuestohan, Barangay Cabatangan, Talisay City (10.7412, 123.1368)
-// Destination: Mt. Silay Summit (10.7620, 123.1810)
-// Distinct route from Mandalagan!
+// 2. MT. SILAY TRAIL (Exact coordinates from Master Prompt)
+// Starting Point: Sitio Campuestohan / Campuestohan Highland Resort area,
+// Barangay Cabatangan, Talisay City (10.600000, 123.133333, ~800m elevation)
+// Intermediate Reference Location: Mt. Mandalagan / Tinagong Dagat Peak
+// (10.664444, 123.220000, ~1,510–1,683 MASL)
+// Destination: Mt. Silay Summit (10.770319, 123.232801, ~1,535 MASL)
 // -------------------------------------------------------------
 export const SILAY_DEFAULT_START: RoutePoint = {
-  lat: 10.7412,
-  lng: 123.1368, // Cabatangan Ranger Station / Sitio Campuestohan
+  lat: 10.600000,
+  lng: 123.133333, // Sitio Campuestohan / Highland Resort area, Brgy. Cabatangan (10°36'N, 123°08'E)
 };
 
 export const SILAY_DEFAULT_DESTINATION: RoutePoint = {
-  lat: 10.7620,
-  lng: 123.1810, // Mt. Silay Summit Peak
+  lat: 10.770319,
+  lng: 123.232801, // Mt. Silay Summit (10°46'13"N, 123°14'01"E)
 };
 
+export const SILAY_REFERENCE_LOCATIONS: ReferenceLocation[] = [
+  {
+    id: "ref-tinagong-dagat-peak",
+    name: "Mt. Mandalagan / Tinagong Dagat Peak",
+    lat: 10.664444,
+    lng: 123.220000,
+    elevation: "1,510 - 1,683 MASL",
+    originalRef: "10°39'52\"N, 123°13'12\"E",
+    description: "Geographical reference point. Only included in the route if the actual hiking path passes through it and is verified.",
+  },
+];
+
 export const DEFAULT_SILAY_GPS_POINTS: RoutePoint[] = [
-  { lat: 10.7412, lng: 123.1368 }, // Sitio Campuestohan / Cabatangan Ranger Station
-  { lat: 10.7455, lng: 123.1445 }, // Campuestohan Highland Ridge
-  { lat: 10.7498, lng: 123.1530 }, // Malanog River Crossing
-  { lat: 10.7540, lng: 123.1635 }, // WWII Bomber Plane Historical Site
-  { lat: 10.7582, lng: 123.1722 }, // Upper Mossy Cloud Forest
-  { lat: 10.7620, lng: 123.1810 }, // Mt. Silay Summit Peak
+  { lat: 10.600000, lng: 123.133333 }, // Sitio Campuestohan Entrance (800m)
+  { lat: 10.638500, lng: 123.158200 }, // Cabatangan Upper Ridge
+  { lat: 10.685000, lng: 123.185000 }, // North Mountain Saddle
+  { lat: 10.732000, lng: 123.211000 }, // Malanog River Basin Approach
+  { lat: 10.754000, lng: 123.223500 }, // WWII Bomber Plane Historical Site
+  { lat: 10.770319, lng: 123.232801 }, // Mt. Silay Summit Peak (1,535 MASL)
 ];
 
 export const DEFAULT_SILAY_CHECKPOINTS: CheckpointItem[] = [
   {
     id: "cp-silay-bomber",
     name: "WWII Bomber Plane Wreckage Site",
-    lat: 10.7540,
-    lng: 123.1635,
+    lat: 10.754000,
+    lng: 123.223500,
     elevation: "1,340 MASL",
     description: "Historical WWII aircraft wreckage site protected under NNNP heritage guidelines.",
   },
   {
-    id: "cp-silay-river",
-    name: "Malanog River Crossing",
-    lat: 10.7498,
-    lng: 123.1530,
-    elevation: "1,120 MASL",
-    description: "Clean river water crossing point with shallow gravel bed.",
+    id: "cp-cabatangan-ridge",
+    name: "Cabatangan Highland Outlook",
+    lat: 10.638500,
+    lng: 123.158200,
+    elevation: "1,050 MASL",
+    description: "Ridge viewpoint overlooking Talisay and Bacolod plains.",
   },
 ];
 
 // -------------------------------------------------------------
-// 3. MT. MARAPARA TRAIL
-// Jump-off: Barangay Canlandog, Municipality of Murcia (10.6054, 123.0841)
-// Destination: Mt. Marapara Summit (10.6150, 123.1495)
+// 3. MT. CANLANDOG TRAIL (Exact coordinates from Master Prompt)
+// Location: Barangay Canlandog, Municipality of Murcia, Negros Occidental
+// Starting Point: Barangay Canlandog Center, Murcia (10.6074, 123.1365, ~452m)
+// Destination: Mount Canlandog Peak (10.608238, 123.145951, ~987m)
+// Alternate Jump-off: Lopez Jaena Route, near Agrilog Transloading Station
 // -------------------------------------------------------------
-export const MARAPARA_DEFAULT_START: RoutePoint = {
-  lat: 10.6054,
-  lng: 123.0841, // Brgy. Canlandog Tourism Station, Murcia
+export const CANLANDOG_DEFAULT_START: RoutePoint = {
+  lat: 10.6074,
+  lng: 123.1365, // Barangay Canlandog Center, Murcia (~452m)
 };
 
-export const MARAPARA_DEFAULT_DESTINATION: RoutePoint = {
-  lat: 10.6150,
-  lng: 123.1495, // Mt. Marapara Summit
+export const CANLANDOG_LOPEZ_JAENA_START: RoutePoint = {
+  lat: 10.6025,
+  lng: 123.1250, // Lopez Jaena Route / near Agrilog Transloading Station
 };
 
-export const DEFAULT_MARAPARA_GPS_POINTS: RoutePoint[] = [
-  { lat: 10.6054, lng: 123.0841 }, // Canlandog Tourism Station
-  { lat: 10.6078, lng: 123.0975 }, // Bago River Tributary
-  { lat: 10.6102, lng: 123.1110 }, // Highland Pine Ridge
-  { lat: 10.6125, lng: 123.1265 }, // Marapara Viewdeck Plateau
-  { lat: 10.6138, lng: 123.1380 }, // North Ridge Forest Trail
-  { lat: 10.6150, lng: 123.1495 }, // Mt. Marapara Summit Peak
+export const CANLANDOG_DEFAULT_DESTINATION: RoutePoint = {
+  lat: 10.608238,
+  lng: 123.145951, // Mount Canlandog Peak (~987m)
+};
+
+export const DEFAULT_CANLANDOG_GPS_POINTS: RoutePoint[] = [
+  { lat: 10.607400, lng: 123.136500 }, // Barangay Canlandog Center (452m)
+  { lat: 10.607650, lng: 123.139200 }, // Canlandog Pine Grove Trail
+  { lat: 10.607900, lng: 123.142400 }, // Bago River Stream Crossing
+  { lat: 10.608238, lng: 123.145951 }, // Mount Canlandog Peak (987m)
 ];
 
-export const DEFAULT_MARAPARA_CHECKPOINTS: CheckpointItem[] = [
+export const DEFAULT_CANLANDOG_CHECKPOINTS: CheckpointItem[] = [
   {
-    id: "cp-marapara-river",
-    name: "Bago River Tributary Crossing",
-    lat: 10.6078,
-    lng: 123.0975,
-    elevation: "680 MASL",
-    description: "River crossing point; heed guide warnings during heavy downpours.",
+    id: "cp-canlandog-stream",
+    name: "Canlandog Stream Crossing",
+    lat: 10.607900,
+    lng: 123.142400,
+    elevation: "620 MASL",
+    description: "Mountain stream crossing; exercise caution after rain.",
   },
   {
-    id: "cp-marapara-pines",
-    name: "Canlandog Pine Tree Grove",
-    lat: 10.6102,
-    lng: 123.1110,
-    elevation: "920 MASL",
-    description: "Cool microclimate rest area with shaded canopy.",
+    id: "cp-canlandog-pine",
+    name: "Canlandog Pine Tree Ridge",
+    lat: 10.607650,
+    lng: 123.139200,
+    elevation: "550 MASL",
+    description: "Cool pine grove rest stop along the ascent path.",
   },
 ];
 
 // -------------------------------------------------------------
-// 4. MALATAN-OG FALLS TRAIL
-// Trail Name: Malatan-og Viewing Deck to Malatan-og Falls
+// 4. MALATAN-OG VIEWING DECK TO MALATAN-OG FALLS (Exact coordinates & Plus Code)
 // Location: Barangay Kumaliskis, Don Salvador Benedicto, Negros Occidental
-// Starting Point: Malatan-og Viewing Deck (10.58755, 123.23221)
-// Destination: Malatan-og Falls (10.59391, 123.22771)
-// EXACT COORDINATES AS SPECIFIED IN USER MASTER PROMPT!
+// Starting Point: Malatan-og Viewing Deck along Eco-Tourism Highway
+// Starting Coordinates: 10.58755, 123.23221 (Plus Code: H6QJ+2V2)
+// Destination: Malatan-og Falls: 10.59391, 123.22771 (Plus Code: 7Q25H6VH+H3)
 // -------------------------------------------------------------
 export const MALATANOG_DEFAULT_START: RoutePoint = {
   lat: 10.58755,
-  lng: 123.23221, // Malatan-og Viewing Deck
+  lng: 123.23221, // Malatan-og Viewing Deck (Plus Code: H6QJ+2V2)
 };
 
 export const MALATANOG_DEFAULT_DESTINATION: RoutePoint = {
   lat: 10.59391,
-  lng: 123.22771, // Malatan-og Falls
+  lng: 123.22771, // Malatan-og Falls (Plus Code: 7Q25H6VH+H3)
 };
 
 export const DEFAULT_MALATANOG_GPS_POINTS: RoutePoint[] = [
-  { lat: 10.58755, lng: 123.23221 }, // Malatan-og Viewing Deck
+  { lat: 10.58755, lng: 123.23221 }, // Malatan-og Viewing Deck (H6QJ+2V2)
   { lat: 10.58910, lng: 123.23120 }, // Lantawan Pine Forest Path
   { lat: 10.59080, lng: 123.23010 }, // Mountain Steps Descent
   { lat: 10.59220, lng: 123.22880 }, // Stream Basin Approach
-  { lat: 10.59391, lng: 123.22771 }, // Malatan-og Falls Basin
+  { lat: 10.59391, lng: 123.22771 }, // Malatan-og Falls Basin (7Q25H6VH+H3)
 ];
 
 export const DEFAULT_MALATANOG_CHECKPOINTS: CheckpointItem[] = [
   {
     id: "cp-malatanog-viewdeck",
-    name: "Malatan-og Viewing Deck",
+    name: "Malatan-og Viewing Deck (H6QJ+2V2)",
     lat: 10.58755,
     lng: 123.23221,
     elevation: "820 MASL",
-    description: "Highway viewdeck overlooking Malatan-og Falls and the canyon.",
+    description: "Highway viewing deck overlooking the canyon and waterfall entrance.",
   },
   {
     id: "cp-malatanog-basin",
-    name: "Malatan-og Falls Natural Pool",
+    name: "Malatan-og Falls Natural Pool (7Q25H6VH+H3)",
     lat: 10.59391,
     lng: 123.22771,
     elevation: "650 MASL",
-    description: "Cold natural waterfall basin surrounded by lush canyon cliffs.",
+    description: "Cold mountain waterfall basin surrounded by lush vertical canyon cliffs.",
   },
 ];
 
@@ -320,6 +352,7 @@ export const FOUR_TRAILS_CONFIG: Record<string, TrailRouteConfig> = {
       lat: 10.6946,
       lng: 123.1742,
       isPrimary: true,
+      elevation: "800 MASL",
     },
     alternateJumpOffs: [
       {
@@ -328,6 +361,7 @@ export const FOUR_TRAILS_CONFIG: Record<string, TrailRouteConfig> = {
         location: "Talisay City, Negros Occidental",
         lat: 10.7250,
         lng: 123.1450,
+        elevation: "850 MASL",
       },
     ],
     destination: {
@@ -351,21 +385,25 @@ export const FOUR_TRAILS_CONFIG: Record<string, TrailRouteConfig> = {
     trailKey: "mt-silay",
     name: "Mt. Silay Trail",
     dbNamePattern: "Silay",
-    location: "Sitio Campuestohan, Barangay Cabatangan, Talisay City",
+    location: "Northern Negros Natural Park, Negros Occidental",
     mountain: "Mount Silay",
     primaryJumpOff: {
-      id: "campuestohan-silay",
-      name: "Sitio Campuestohan, Barangay Cabatangan",
-      location: "Talisay City, Negros Occidental",
-      lat: 10.7412,
-      lng: 123.1368,
+      id: "campuestohan-silay-main",
+      name: "Sitio Campuestohan / Campuestohan Highland Area",
+      location: "Barangay Cabatangan, Talisay City (10°36'N, 123°08'E)",
+      lat: 10.600000,
+      lng: 123.133333,
+      elevation: "800 MASL",
       isPrimary: true,
+      notes: "Starting coordinates verified: 10.600000, 123.133333 (~800m elevation)",
     },
+    referenceLocations: SILAY_REFERENCE_LOCATIONS,
     destination: {
       name: "Mt. Silay Summit",
-      lat: 10.7620,
-      lng: 123.1810,
+      lat: 10.770319,
+      lng: 123.232801,
       elevation: "1,535 MASL",
+      originalRef: "10°46'13\"N, 123°14'01\"E",
     },
     defaultPoints: DEFAULT_SILAY_GPS_POINTS,
     defaultCheckpoints: DEFAULT_SILAY_CHECKPOINTS,
@@ -373,68 +411,89 @@ export const FOUR_TRAILS_CONFIG: Record<string, TrailRouteConfig> = {
     estimatedDuration: "6 - 8 hours",
     difficulty: "Moderate",
     safetyReminders: [
+      "Tinagong Dagat is an intermediate geographical reference; do not include unless verified on the path.",
       "Do not tamper with or move artifacts at the WWII bomber wreckage site.",
       "Maintain trail discipline on steep ridges and muddy sections.",
     ],
   },
-  "mt-marapara": {
-    trailKey: "mt-marapara",
-    name: "Mt. Marapara Trail",
-    dbNamePattern: "Marapara",
-    location: "Barangay Canlandog, Municipality of Murcia",
-    mountain: "Mount Marapara",
+  "mt-canlandog": {
+    trailKey: "mt-canlandog",
+    name: "Mt. Canlandog Trail",
+    dbNamePattern: "Canlandog",
+    location: "Barangay Canlandog, Municipality of Murcia, Negros Occidental",
+    mountain: "Mount Canlandog",
     primaryJumpOff: {
-      id: "canlandog-murcia",
-      name: "Barangay Canlandog Tourism Station",
-      location: "Murcia, Negros Occidental",
-      lat: 10.6054,
-      lng: 123.0841,
+      id: "canlandog-center-main",
+      name: "Barangay Canlandog Center, Murcia",
+      location: "Brgy. Canlandog, Murcia, Negros Occidental",
+      lat: 10.6074,
+      lng: 123.1365,
+      elevation: "452 MASL",
       isPrimary: true,
+      notes: "Starting point at Barangay Canlandog Center (10.6074°N, 123.1365°E, ~452m)",
     },
+    alternateJumpOffs: [
+      {
+        id: "lopez-jaena-route",
+        name: "Lopez Jaena Route (near Agrilog Transloading Station)",
+        location: "Bacolod–Murcia–Don Salvador Benedicto–San Carlos Road",
+        lat: 10.6025,
+        lng: 123.1250,
+        elevation: "420 MASL",
+        notes: "Possible additional jump-off option; exact entrance verified prior to departure.",
+      },
+    ],
     destination: {
-      name: "Mt. Marapara Summit",
-      lat: 10.6150,
-      lng: 123.1495,
-      elevation: "1,200 MASL",
+      name: "Mount Canlandog Peak",
+      lat: 10.608238,
+      lng: 123.145951,
+      elevation: "987 MASL",
     },
-    defaultPoints: DEFAULT_MARAPARA_GPS_POINTS,
-    defaultCheckpoints: DEFAULT_MARAPARA_CHECKPOINTS,
-    defaultDistanceKm: 9.2,
-    estimatedDuration: "4 - 5 hours",
+    defaultPoints: DEFAULT_CANLANDOG_GPS_POINTS,
+    defaultCheckpoints: DEFAULT_CANLANDOG_CHECKPOINTS,
+    defaultDistanceKm: 3.8,
+    estimatedDuration: "2 - 3 hours",
     difficulty: "Moderate",
     safetyReminders: [
+      "Do not assume the barangay center is the actual trail entrance; verify trail dispatch point.",
       "River currents can swell rapidly during rainfall.",
-      "Always follow the accredited guide's commands during river crossings.",
+      "Keep this trail separate from Mt. Marapara and other mountain trails.",
     ],
   },
-  "kumalisikis": {
-    trailKey: "kumalisikis",
+  "malatan-og": {
+    trailKey: "malatan-og",
     name: "Malatan-og Viewing Deck to Malatan-og Falls",
-    dbNamePattern: "Kumalisikis",
-    location: "Barangay Kumaliskis, Don Salvador Benedicto",
+    dbNamePattern: "Malatan",
+    location: "Barangay Kumaliskis, Don Salvador Benedicto, Negros Occidental",
     mountain: "Don Salvador Benedicto Highlands",
     primaryJumpOff: {
-      id: "malatanog-viewdeck",
-      name: "Malatan-og Viewing Deck",
-      location: "Brgy. Kumaliskis, Don Salvador Benedicto",
+      id: "malatanog-viewdeck-main",
+      name: "Malatan-og Viewing Deck (Plus Code: H6QJ+2V2)",
+      location: "Eco-Tourism Highway, Brgy. Kumaliskis, DSB",
       lat: 10.58755,
       lng: 123.23221,
+      elevation: "820 MASL",
       isPrimary: true,
+      notes: "Starting coordinates 10.58755, 123.23221 match Viewing Deck Plus Code H6QJ+2V2.",
     },
     destination: {
-      name: "Malatan-og Falls",
+      name: "Malatan-og Falls (Plus Code: 7Q25H6VH+H3)",
       lat: 10.59391,
       lng: 123.22771,
       elevation: "650 MASL",
     },
     defaultPoints: DEFAULT_MALATANOG_GPS_POINTS,
     defaultCheckpoints: DEFAULT_MALATANOG_CHECKPOINTS,
-    defaultDistanceKm: 5.5,
-    estimatedDuration: "2 - 3 hours",
+    defaultDistanceKm: 2.2,
+    estimatedDuration: "1.5 - 2.5 hours",
     difficulty: "Easy",
     safetyReminders: [
       "Steps down to the falls can become slippery when damp.",
-      "Keep to designated walkways and do not litter in the river basin.",
+      "Stay on designated walkways and do not litter in the river basin.",
     ],
   },
 };
+
+// Aliases for compatibility
+FOUR_TRAILS_CONFIG["mt-marapara"] = FOUR_TRAILS_CONFIG["mt-canlandog"];
+FOUR_TRAILS_CONFIG["kumalisikis"] = FOUR_TRAILS_CONFIG["malatan-og"];

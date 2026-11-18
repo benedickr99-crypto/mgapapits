@@ -28,7 +28,7 @@ INSERT INTO public.trails (name, difficulty, description, active, barangay, city
 VALUES (
   'Mt. Mandalagan (Patag Trail)',
   'Challenging',
-  'A high-altitude rainforest trail ascending from Old Hospital, Brgy. Patag, Silay City to Mt. Mandalagan Summit (1,885 MASL), passing through the Tinagong Dagat high caldera lakebed.',
+  'A high-altitude rainforest trail ascending from Old Hospital, Brgy. Patag, Silay City (10.6946 N, 123.1742 E) to Mt. Mandalagan Summit (1,885 MASL), with alternate jump-off at Sitio Campuestohan and intermediate camp at Tinagong Dagat (1,550 MASL).',
   true,
   'Patag',
   'Silay City',
@@ -37,12 +37,12 @@ VALUES (
 )
 ON CONFLICT DO NOTHING;
 
--- 2) Mt. Silay (Cabatangan Trail)
+-- 2) Mt. Silay Trail
 INSERT INTO public.trails (name, difficulty, description, active, barangay, city, distance_km, route_status)
 VALUES (
-  'Mt. Silay (Cabatangan Trail)',
+  'Mt. Silay Trail',
   'Moderate',
-  'An authentic forest trek from Sitio Campuestohan / Cabatangan Ranger Station to Mt. Silay Summit (1,535 MASL), featuring the historic WWII bomber wreckage site.',
+  'Starting at Sitio Campuestohan / Campuestohan Highland Resort area, Brgy. Cabatangan, Talisay City (10.600000 N, 123.133333 E, ~800m) ascending to Mt. Silay Summit (10.770319 N, 123.232801 E, 1,535 MASL) with WWII bomber plane historical site and intermediate reference vantage of Mt. Mandalagan / Tinagong Dagat Peak.',
   true,
   'Cabatangan',
   'Talisay City',
@@ -51,30 +51,30 @@ VALUES (
 )
 ON CONFLICT DO NOTHING;
 
--- 3) Mt. Marapara (Canlandog Trail)
+-- 3) Mt. Canlandog Trail
 INSERT INTO public.trails (name, difficulty, description, active, barangay, city, distance_km, route_status)
 VALUES (
-  'Mt. Marapara (Canlandog Trail)',
+  'Mt. Canlandog Trail',
   'Moderate',
-  'Scenic highland trek starting from Barangay Canlandog, Murcia, crossing mountain springs and pine ridges toward Mt. Marapara Summit (1,200 MASL).',
+  'Starting at Barangay Canlandog Center, Murcia (10.6074 N, 123.1365 E, 452m) to Mount Canlandog Peak (10.608238 N, 123.145951 E, 987m), with alternate jump-off via Lopez Jaena Route along Bacolod-Murcia-DSB Road.',
   true,
   'Canlandog',
   'Murcia',
-  9.2,
+  3.8,
   'published'
 )
 ON CONFLICT DO NOTHING;
 
--- 4) Malatan-og Falls Trail (Kumalisikis Trail)
+-- 4) Malatan-og Viewing Deck to Malatan-og Falls
 INSERT INTO public.trails (name, difficulty, description, active, barangay, city, distance_km, route_status)
 VALUES (
-  'Kumalisikis Trail',
+  'Malatan-og Viewing Deck to Malatan-og Falls',
   'Easy',
-  'Malatan-og Viewing Deck (10.58755 N, 123.23221 E) to Malatan-og Falls (10.59391 N, 123.22771 E), Brgy. Kumaliskis, Don Salvador Benedicto.',
+  'Scenic descent from Malatan-og Viewing Deck along Eco-Tourism Highway (10.58755 N, 123.23221 E, Plus Code: H6QJ+2V2, 820m) to Malatan-og Falls natural pool (10.59391 N, 123.22771 E, Plus Code: 7Q25H6VH+H3, 650m), Brgy. Kumaliskis, Don Salvador Benedicto.',
   true,
   'Kumaliskis',
   'Don Salvador Benedicto',
-  5.5,
+  2.2,
   'published'
 )
 ON CONFLICT DO NOTHING;
