@@ -334,8 +334,11 @@ export type Database = {
           created_at: string
           description: string | null
           difficulty: string | null
+          distance_km: number | null
           id: string
           name: string
+          route_geojson: Json | null
+          route_status: string | null
           weekly_slots: number
         }
         Insert: {
@@ -345,8 +348,11 @@ export type Database = {
           created_at?: string
           description?: string | null
           difficulty?: string | null
+          distance_km?: number | null
           id?: string
           name: string
+          route_geojson?: Json | null
+          route_status?: string | null
           weekly_slots?: number
         }
         Update: {
@@ -356,8 +362,11 @@ export type Database = {
           created_at?: string
           description?: string | null
           difficulty?: string | null
+          distance_km?: number | null
           id?: string
           name?: string
+          route_geojson?: Json | null
+          route_status?: string | null
           weekly_slots?: number
         }
         Relationships: []

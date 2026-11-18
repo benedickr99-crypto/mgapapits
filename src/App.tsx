@@ -25,6 +25,7 @@ import SiteHeader from "./components/SiteHeader";
 import SiteFooter from "./components/SiteFooter";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./index.css";
+import "leaflet/dist/leaflet.css";
 import { Toaster } from "@/components/ui/sonner";
 
 function PageFallback() {
